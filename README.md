@@ -1,4 +1,4 @@
-# Agent-go
+# agent-go
 
 Simple Agent with prompt and tooling capabilities.
 
