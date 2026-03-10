@@ -30,7 +30,10 @@ ai:
   provider: "ollama"
   model: "qwen3.5:latest" 
   api_key: "http://localhost:11434"
+  prompt_timeout: "20m"
   context_size: 8192
+  max_history_lines: 5000
+  max_history_messages: 10000
 ```
 
 add MCP servers (tools) :

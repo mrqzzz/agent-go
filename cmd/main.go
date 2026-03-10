@@ -74,9 +74,21 @@ func main() {
 
 	// 4. Create agent
 	ag := agent.NewAgent(aiProvider, mcpClients, *debug, cfg.AI.MaxHistoryLines, cfg.AI.MaxHistoryMessages)
+	promptTimeout := 5 * time.Minute
+	if strings.TrimSpace(cfg.AI.PromptTimeout) != "" {
+		d, err := time.ParseDuration(cfg.AI.PromptTimeout)
+		if err != nil {
+			logf("⚠️  Invalid ai.prompt_timeout value %q, using default %s\n", cfg.AI.PromptTimeout, promptTimeout)
+		} else if d > 0 {
+			promptTimeout = d
+		} else {
+			logf("⚠️  ai.prompt_timeout must be > 0, using default %s\n", promptTimeout)
+		}
+	}
+	logf("⏱️  Prompt timeout: %s\n", promptTimeout)
 
 	if flag.NArg() > 0 {
-		if err := runBatchMode(ag, flag.Arg(0)); err != nil {
+		if err := runBatchMode(ag, flag.Arg(0), promptTimeout); err != nil {
 			log.Fatalf("❌ Batch mode failed: %v", err)
 		}
 		return
@@ -123,13 +135,13 @@ func main() {
 			continue
 		}
 
-		if err := runPrompt(ag, input); err != nil {
+		if err := runPrompt(ag, input, promptTimeout); err != nil {
 			logf("❌ Execution error: %v\n", err)
 		}
 	}
 }
 
-func runBatchMode(ag *agent.Agent, promptFile string) error {
+func runBatchMode(ag *agent.Agent, promptFile string, promptTimeout time.Duration) error {
 	file, err := os.Open(promptFile)
 	if err != nil {
 		return fmt.Errorf("cannot open prompt file %q: %w", promptFile, err)
@@ -148,7 +160,7 @@ func runBatchMode(ag *agent.Agent, promptFile string) error {
 		}
 
 		logf("➡️  Batch prompt %d: %s\n", lineNumber, prompt)
-		if err := runPrompt(ag, prompt); err != nil {
+		if err := runPrompt(ag, prompt, promptTimeout); err != nil {
 			return fmt.Errorf("line %d: %w", lineNumber, err)
 		}
 	}
@@ -161,8 +173,12 @@ func runBatchMode(ag *agent.Agent, promptFile string) error {
 	return nil
 }
 
-func runPrompt(ag *agent.Agent, input string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+func runPrompt(ag *agent.Agent, input string, promptTimeout time.Duration) error {
+	if promptTimeout <= 0 {
+		promptTimeout = 5 * time.Minute
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), promptTimeout)
 	defer cancel()
 
 	startTime := time.Now()
