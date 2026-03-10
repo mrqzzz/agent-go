@@ -143,7 +143,7 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 		errorCount = 0
 
 		for _, toolCall := range response.Message.ToolCalls {
-			a.logf("🔧  Tool Call: %s \n   Args: %s\n", toolCall.Name, toolCall.Arguments)
+			a.logf("\n🔧  Call: %s%s%s \n    Args: %s%s%s\n", bgBlue, toolCall.Name, styleEnd, bgBlue, toolCall.Arguments, styleEnd)
 
 			rawResult, err := a.executeTool(ctx, toolCall.Name, toolCall.Arguments)
 
@@ -168,10 +168,10 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 				lines := strings.Split(strings.TrimSpace(finalResult), "\n")
 				maxLines := 5000
 				if len(lines) <= maxLines {
-					a.logf("✅ Tool Output:\n\n%s%s%s\n\n", italicStart, finalResult, italicEnd)
+					a.logf("✅ Tool Output:\n\n%s%s%s%s\n\n", bgDarkGreen, italicStart, finalResult, styleEnd)
 				} else {
 					preview := strings.Join(lines[:maxLines], "\n")
-					a.logf("✅ Tool Output (%d lines, showing first %d):\n\n%s%s%s\n   ...\n\n", len(lines), maxLines, italicStart, preview, italicEnd)
+					a.logf("✅ Tool Output (%d lines, showing first %d):\n\n%s%s%s%s\n   ...\n\n", len(lines), maxLines, bgDarkGreen, italicStart, preview, styleEnd)
 				}
 			}
 
@@ -197,7 +197,9 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 
 const (
 	italicStart = "\x1b[3m"
-	italicEnd   = "\x1b[0m"
+	bgBlue      = "\x1b[48;5;22m"
+	bgDarkGreen = "\x1b[48;5;24m"
+	styleEnd    = "\x1b[0m"
 )
 
 func (a *Agent) logln(msg string) {
