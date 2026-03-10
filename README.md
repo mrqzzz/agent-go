@@ -10,7 +10,7 @@ Simple Agent with prompt and tooling capabilities.
 - Request to do several tasks with one prompt (it works if the LLM Model is smart enough to handle it)
 - The prompts history is saved to `/tmp/agent-go-history`, run with `--nohistory=true` to prevent saving the history to file
 
-This agent works well with "shell-mcp" https://github.com/mrqzzz/shell-mcp to execute shell commands in a stateful way.
+This agent works well with **shell-mcp** https://github.com/mrqzzz/shell-mcp to execute shell commands in a stateful way.
 
 <img width="800" height="436" alt="image" src="https://github.com/user-attachments/assets/314c5d79-155b-4534-a8b5-ba937b03edad" />
 
