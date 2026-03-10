@@ -222,7 +222,7 @@ func (c *Client) CallTool(ctx context.Context, toolName string, argsJSON string)
 	}
 
 	// Execution-specific timeout
-	timeoutDur := 60 * time.Second
+	timeoutDur := 120 * time.Second
 	callCtx, cancel := context.WithTimeout(ctx, timeoutDur)
 	defer cancel()
 
