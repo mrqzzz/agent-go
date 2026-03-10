@@ -81,11 +81,35 @@ type ollamaResponse struct {
 	Done bool `json:"done"`
 }
 
+// escapeXMLContent replaces characters that break Qwen's XML chat template.
+func escapeXMLContent(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	return s
+}
+
 // sanitizeHistory fixes message patterns that confuse Qwen's XML tool-call template.
 func (p *OllamaProvider) sanitizeHistory(history []Message) []Message {
 	sanitized := make([]Message, 0, len(history))
 	for _, msg := range history {
 		m := msg
+		// Escape XML-sensitive characters in ALL message content.
+		// Qwen's chat template uses XML; raw <, >, & in content breaks parsing.
+		// Tool output is the main offender (e.g. git's "<file>"), but user
+		// and assistant messages can also contain & (from "&&" commands).
+		m.Content = escapeXMLContent(m.Content)
+		// Also escape tool call arguments in assistant messages.
+		// Arguments like {"command":"cd foo && ls"} contain bare & which
+		// breaks XML when rendered inside <tool_call> blocks.
+		if len(m.ToolCalls) > 0 {
+			escapedCalls := make([]ToolCall, len(m.ToolCalls))
+			copy(escapedCalls, m.ToolCalls)
+			for i := range escapedCalls {
+				escapedCalls[i].Arguments = escapeXMLContent(escapedCalls[i].Arguments)
+			}
+			m.ToolCalls = escapedCalls
+		}
 		// Assistant messages with empty content + tool_calls break Qwen's XML template.
 		// Give them a non-empty content so the template renders correctly.
 		if m.Role == RoleModel && m.Content == "" && len(m.ToolCalls) > 0 {
@@ -127,15 +151,17 @@ func (p *OllamaProvider) flattenHistory(history []Message) []Message {
 			if msg.Content != "" {
 				content = msg.Content + " " + content
 			}
-			flat = append(flat, Message{Role: RoleModel, Content: content})
+			flat = append(flat, Message{Role: RoleModel, Content: escapeXMLContent(content)})
 		case msg.Role == RoleTool:
 			// Convert tool response to user message with result
 			flat = append(flat, Message{
 				Role:    RoleUser,
-				Content: fmt.Sprintf("Result of %s: %s", msg.Name, msg.Content),
+				Content: escapeXMLContent(fmt.Sprintf("Result of %s: %s", msg.Name, msg.Content)),
 			})
 		default:
-			flat = append(flat, msg)
+			m := msg
+			m.Content = escapeXMLContent(m.Content)
+			flat = append(flat, m)
 		}
 	}
 	// Merge consecutive same-role messages
@@ -212,14 +238,13 @@ func (p *OllamaProvider) ChatCompletion(ctx context.Context, history []Message, 
 		// Sanitize history to fix patterns that break Qwen's XML template
 		msgs := p.sanitizeHistory(history)
 
-		// After 2 XML errors, flatten history to remove all tool_call XML structures.
-		// This converts tool exchanges to plain text, avoiding the XML template entirely.
+		// On the first XML error, flatten history to remove all tool_call XML
+		// structures and truncate aggressively. This avoids the XML template
+		// entirely and keeps context small enough to prevent truncation issues.
 		sendTools := oTools
-		if xmlErrorCount >= 2 {
+		if xmlErrorCount >= 1 {
 			msgs = p.flattenHistory(history)
 			msgs = p.truncateHistory(msgs, 4)
-		} else if xmlErrorCount >= 1 {
-			msgs = p.truncateHistory(msgs, 6)
 		}
 
 		reqPayload := ollamaRequest{
@@ -269,9 +294,6 @@ func (p *OllamaProvider) ChatCompletion(ctx context.Context, history []Message, 
 			if resp.StatusCode == 500 && isXmlError {
 				// Log the request body that caused the error
 				fmt.Printf("\n📝 [DEBUG] Request Body (Glitch T=%d):\n%s\n\n", attempt, string(jsonBody))
-
-				fmt.Printf("\n📝🤖 [DEBUG] Response Body (Glitch T=%d):\n%s\n\n", attempt, string(body))
-
 				fmt.Printf("⚠️  Ollama glitch: %s. Retrying in 1s...\n", strings.TrimSpace(errMsg))
 				lastErr = fmt.Errorf("Ollama XML Error: %s", errMsg)
 				xmlErrorCount++

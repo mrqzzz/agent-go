@@ -14,20 +14,30 @@ import (
 )
 
 type Agent struct {
-	LLMClient  llm.Provider
-	MCPClients []*mcp.Client
-	History    []llm.Message
-	MaxErrors  int
-	Debug      bool
+	LLMClient          llm.Provider
+	MCPClients         []*mcp.Client
+	History            []llm.Message
+	MaxErrors          int
+	Debug              bool
+	MaxHistoryLines    int
+	MaxHistoryMessages int
 }
 
-func NewAgent(llmProvider llm.Provider, mcpServers []*mcp.Client, debug bool) *Agent {
+func NewAgent(llmProvider llm.Provider, mcpServers []*mcp.Client, debug bool, maxHistoryLines, maxHistoryMessages int) *Agent {
+	if maxHistoryLines <= 0 {
+		maxHistoryLines = 15
+	}
+	if maxHistoryMessages <= 0 {
+		maxHistoryMessages = 30
+	}
 	return &Agent{
-		LLMClient:  llmProvider,
-		MCPClients: mcpServers,
-		MaxErrors:  5,
-		History:    make([]llm.Message, 0),
-		Debug:      debug,
+		LLMClient:          llmProvider,
+		MCPClients:         mcpServers,
+		MaxErrors:          5,
+		History:            make([]llm.Message, 0),
+		Debug:              debug,
+		MaxHistoryLines:    maxHistoryLines,
+		MaxHistoryMessages: maxHistoryMessages,
 	}
 }
 
@@ -168,10 +178,10 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 				lines := strings.Split(strings.TrimSpace(finalResult), "\n")
 				maxLines := 5000
 				if len(lines) <= maxLines {
-					a.logf("✅ Tool Output:\n\n%s\n\n", gutterLines(finalResult, gutterGreen+italicStart))
+					a.logf("✅ Tool Output:\n%s\n", gutterLines(finalResult, gutterGreen+italicStart))
 				} else {
 					preview := strings.Join(lines[:maxLines], "\n")
-					a.logf("✅ Tool Output (%d lines, showing first %d):\n\n%s\n   ...\n\n", len(lines), maxLines, gutterLines(preview, gutterGreen+italicStart))
+					a.logf("✅ Tool Output (%d lines, showing first %d):\n%s\n   ...\n", len(lines), maxLines, gutterLines(preview, gutterGreen+italicStart))
 				}
 			}
 
@@ -179,9 +189,12 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 				Role:       llm.RoleTool,
 				ToolCallID: toolCall.ID,
 				Name:       toolCall.Name,
-				Content:    stripANSI(finalResult),
+				Content:    truncateForHistory(stripANSI(finalResult), a.MaxHistoryLines),
 			})
 		}
+
+		// Compact old exchanges to stay within context window limits.
+		a.compactHistory()
 
 		// Pre-emptive continuation: inject a brief user message after tool results
 		// so the model knows to keep going. This prevents the blank response that
@@ -226,10 +239,44 @@ func gutterLines(text string, gutterStyle string) string {
 // ansiRegex matches ANSI escape sequences, terminal control codes, and carriage returns.
 var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b\][^\x1b]*\x1b\\|\x1b[()][A-Z0-9]|\x1b[>=<]|\x07|\x08.|\r`)
 
-// stripANSI removes ANSI escape sequences from s to prevent them from breaking
-// the LLM's XML chat template (e.g. \x1b> contains '>' which closes XML tags).
+// stripANSI removes ANSI escape sequences and XML-unsafe characters from s
+// to prevent them from breaking the LLM's XML chat template.
 func stripANSI(s string) string {
-	return ansiRegex.ReplaceAllString(s, "")
+	s = ansiRegex.ReplaceAllString(s, "")
+	s = strings.ReplaceAll(s, "&", "+")
+	s = strings.ReplaceAll(s, "<", "(")
+	s = strings.ReplaceAll(s, ">", ")")
+	return s
+}
+
+// truncateForHistory keeps tool output short so the conversation stays within
+// the LLM's context window.  Keeps the tail (most recent output lines) because
+// that's what the model needs to decide the next action (e.g. a shell prompt or error).
+func truncateForHistory(s string, maxLines int) string {
+	lines := strings.Split(s, "\n")
+	if len(lines) <= maxLines {
+		return s
+	}
+	log.Printf("⚠️  Truncating tool output for history: original %d lines, keeping last %d lines.", len(lines), maxLines)
+	kept := lines[len(lines)-maxLines:]
+	return "...\n" + strings.Join(kept, "\n")
+}
+
+// compactHistory drops old tool-call exchanges when the history grows too large.
+// It always preserves: the system prompt (index 0), the original user request
+// (index 1), and the most recent exchanges.
+func (a *Agent) compactHistory() {
+	if len(a.History) <= a.MaxHistoryMessages {
+		return
+	}
+	log.Printf("⚠️  Compacting history: current %d messages, max allowed %d. Dropping old exchanges.\n", len(a.History), a.MaxHistoryMessages)
+	// Keep system prompt + original user message + last (max-2) messages.
+	keep := a.MaxHistoryMessages - 2
+	compact := make([]llm.Message, 0, a.MaxHistoryMessages)
+	compact = append(compact, a.History[0]) // system
+	compact = append(compact, a.History[1]) // first user message
+	compact = append(compact, a.History[len(a.History)-keep:]...)
+	a.History = compact
 }
 
 // interactivePromptPatterns are substrings that indicate the shell is waiting for user input.

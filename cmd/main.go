@@ -73,7 +73,7 @@ func main() {
 	}
 
 	// 4. Create agent
-	ag := agent.NewAgent(aiProvider, mcpClients, *debug)
+	ag := agent.NewAgent(aiProvider, mcpClients, *debug, cfg.AI.MaxHistoryLines, cfg.AI.MaxHistoryMessages)
 
 	if flag.NArg() > 0 {
 		if err := runBatchMode(ag, flag.Arg(0)); err != nil {

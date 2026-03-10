@@ -12,10 +12,12 @@ type Config struct {
 }
 
 type AIConfig struct {
-	Provider    string `yaml:"provider"` // e.g. "openai"
-	Model       string `yaml:"model"`    // e.g. "gpt-4o"
-	APIKey      string `yaml:"api_key"`
-	ContextSize int    `yaml:"context_size"`
+	Provider           string `yaml:"provider"` // e.g. "openai"
+	Model              string `yaml:"model"`    // e.g. "gpt-4o"
+	APIKey             string `yaml:"api_key"`
+	ContextSize        int    `yaml:"context_size"`
+	MaxHistoryLines    int    `yaml:"max_history_lines"`
+	MaxHistoryMessages int    `yaml:"max_history_messages"`
 }
 
 type MCPServerConfig struct {
