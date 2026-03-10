@@ -3,9 +3,9 @@
 Simple Agent with prompt and tooling capabilities.
 
 
-- Connects to a configured LLM Model (fer example a qwen3.5 running in Ollama locally)
-- Configure yout MCP servers
-- Configure the Context size
+- Connects to a configured LLM Model (far example a qwen3.5 running in Ollama locally)
+- Configure MCP servers
+- Configure Context size
 - Chat via the build-in prompt
 - Request to do several tasks with one prompt (it works if the LLM Model is smart enough to handle it)
 
