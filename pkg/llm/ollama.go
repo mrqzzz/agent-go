@@ -17,10 +17,11 @@ type OllamaProvider struct {
 	BaseURL     string
 	Model       string
 	ContextSize int
+	Debug       bool
 	Client      *http.Client
 }
 
-func NewOllama(baseURL, model string, ctxSize int) *OllamaProvider {
+func NewOllama(baseURL, model string, ctxSize int, debug bool) *OllamaProvider {
 	if baseURL == "" {
 		baseURL = "http://localhost:11434"
 	}
@@ -32,6 +33,7 @@ func NewOllama(baseURL, model string, ctxSize int) *OllamaProvider {
 		BaseURL:     baseURL,
 		Model:       model,
 		ContextSize: ctxSize,
+		Debug:       debug,
 		Client: &http.Client{
 			// High overall timeout to allow for processing
 			Timeout: 600 * time.Second,
@@ -54,7 +56,7 @@ func NewOllama(baseURL, model string, ctxSize int) *OllamaProvider {
 // --- Internal structures ---
 type ollamaRequest struct {
 	Model    string                 `json:"model"`
-	Messages []Message              `json:"messages"`
+	Messages []ollamaMessage        `json:"messages"`
 	Tools    []ollamaTool           `json:"tools,omitempty"`
 	Stream   bool                   `json:"stream"`
 	Options  map[string]interface{} `json:"options,omitempty"`
@@ -81,11 +83,99 @@ type ollamaResponse struct {
 	Done bool `json:"done"`
 }
 
+// ollamaMessage is the Ollama-native message format for requests.
+// Tool calls use Ollama's format with arguments as a JSON object,
+// not a double-encoded string, to prevent XML template breakage.
+type ollamaMessage struct {
+	Role       string           `json:"role"`
+	Content    string           `json:"content"`
+	Name       string           `json:"name,omitempty"`
+	ToolCalls  []ollamaToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string           `json:"tool_call_id,omitempty"`
+}
+
+type ollamaToolCall struct {
+	Function ollamaToolCallFunc `json:"function"`
+}
+
+type ollamaToolCallFunc struct {
+	Name      string                 `json:"name"`
+	Arguments map[string]interface{} `json:"arguments"`
+}
+
+// toOllamaMessages converts internal Messages to Ollama's native format.
+// Arguments are parsed from JSON strings back to objects so they appear as
+// native JSON objects in the request (single encoding, not double-encoded strings).
+// String values inside arguments are XML-escaped here (at the Ollama boundary)
+// so the model's stored history retains raw values like && while the rendered
+// XML template stays valid.
+func toOllamaMessages(msgs []Message) []ollamaMessage {
+	result := make([]ollamaMessage, 0, len(msgs))
+	for _, m := range msgs {
+		om := ollamaMessage{
+			Role:       m.Role,
+			Content:    m.Content,
+			Name:       m.Name,
+			ToolCallID: m.ToolCallID,
+		}
+		for _, tc := range m.ToolCalls {
+			var args map[string]interface{}
+			if err := json.Unmarshal([]byte(tc.Arguments), &args); err != nil {
+				args = map[string]interface{}{}
+			}
+			escapeMapValues(args)
+			om.ToolCalls = append(om.ToolCalls, ollamaToolCall{
+				Function: ollamaToolCallFunc{
+					Name:      tc.Name,
+					Arguments: args,
+				},
+			})
+		}
+		result = append(result, om)
+	}
+	return result
+}
+
+// unescapeMapValues reverses XML entities in all string values of a map (recursively).
+func unescapeMapValues(m map[string]interface{}) {
+	for k, v := range m {
+		switch val := v.(type) {
+		case string:
+			m[k] = unescapeXMLContent(val)
+		case map[string]interface{}:
+			unescapeMapValues(val)
+		}
+	}
+}
+
+// escapeMapValues XML-escapes all string values in a map (recursively).
+// Un-escapes first to avoid double-escaping if the model already produced entities.
+func escapeMapValues(m map[string]interface{}) {
+	for k, v := range m {
+		switch val := v.(type) {
+		case string:
+			m[k] = escapeXMLContent(unescapeXMLContent(val))
+		case map[string]interface{}:
+			escapeMapValues(val)
+		}
+	}
+}
+
 // escapeXMLContent replaces characters that break Qwen's XML chat template.
 func escapeXMLContent(s string) string {
 	s = strings.ReplaceAll(s, "&", "&amp;")
 	s = strings.ReplaceAll(s, "<", "&lt;")
 	s = strings.ReplaceAll(s, ">", "&gt;")
+	return s
+}
+
+// unescapeXMLContent reverses escapeXMLContent.
+// The model may reproduce XML entities it saw in the rendered template,
+// so we un-escape them to recover the raw values.
+func unescapeXMLContent(s string) string {
+	s = strings.ReplaceAll(s, "&lt;", "<")
+	s = strings.ReplaceAll(s, "&gt;", ">")
+	s = strings.ReplaceAll(s, "&amp;", "&")
 	return s
 }
 
@@ -99,17 +189,10 @@ func (p *OllamaProvider) sanitizeHistory(history []Message) []Message {
 		// Tool output is the main offender (e.g. git's "<file>"), but user
 		// and assistant messages can also contain & (from "&&" commands).
 		m.Content = escapeXMLContent(m.Content)
-		// Also escape tool call arguments in assistant messages.
-		// Arguments like {"command":"cd foo && ls"} contain bare & which
-		// breaks XML when rendered inside <tool_call> blocks.
-		if len(m.ToolCalls) > 0 {
-			escapedCalls := make([]ToolCall, len(m.ToolCalls))
-			copy(escapedCalls, m.ToolCalls)
-			for i := range escapedCalls {
-				escapedCalls[i].Arguments = escapeXMLContent(escapedCalls[i].Arguments)
-			}
-			m.ToolCalls = escapedCalls
-		}
+		// NOTE: We do NOT escape tool call arguments here. Argument escaping
+		// happens in toOllamaMessages (at the Ollama boundary) so the stored
+		// history retains raw values. If we escaped here, the model would see
+		// &amp;&amp; in its history and reproduce it in future tool calls.
 		// Assistant messages with empty content + tool_calls break Qwen's XML template.
 		// Give them a non-empty content so the template renders correctly.
 		if m.Role == RoleModel && m.Content == "" && len(m.ToolCalls) > 0 {
@@ -249,7 +332,7 @@ func (p *OllamaProvider) ChatCompletion(ctx context.Context, history []Message, 
 
 		reqPayload := ollamaRequest{
 			Model:    p.Model,
-			Messages: msgs,
+			Messages: toOllamaMessages(msgs),
 			Tools:    sendTools,
 			Stream:   false,
 			Options: map[string]interface{}{
@@ -259,10 +342,13 @@ func (p *OllamaProvider) ChatCompletion(ctx context.Context, history []Message, 
 			},
 		}
 
-		jsonBody, err := json.Marshal(reqPayload)
-		if err != nil {
+		var reqBuf bytes.Buffer
+		reqEnc := json.NewEncoder(&reqBuf)
+		reqEnc.SetEscapeHTML(false)
+		if err := reqEnc.Encode(reqPayload); err != nil {
 			return nil, fmt.Errorf("error marshalling request: %w", err)
 		}
+		jsonBody := reqBuf.Bytes()
 
 		url := fmt.Sprintf("%s/api/chat", p.BaseURL)
 		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
@@ -293,7 +379,9 @@ func (p *OllamaProvider) ChatCompletion(ctx context.Context, history []Message, 
 
 			if resp.StatusCode == 500 && isXmlError {
 				// Log the request body that caused the error
-				fmt.Printf("\n📝 [DEBUG] Request Body (Glitch T=%d):\n%s\n\n", attempt, string(jsonBody))
+				if p.Debug {
+					fmt.Printf("\n📝 [DEBUG] Request Body (Glitch T=%d):\n%s\n\n", attempt, string(jsonBody))
+				}
 				fmt.Printf("⚠️  Ollama glitch: %s. Retrying in 1s...\n", strings.TrimSpace(errMsg))
 				lastErr = fmt.Errorf("Ollama XML Error: %s", errMsg)
 				xmlErrorCount++
@@ -317,16 +405,24 @@ func (p *OllamaProvider) ChatCompletion(ctx context.Context, history []Message, 
 
 		if len(oResp.Message.ToolCalls) > 0 {
 			for _, tc := range oResp.Message.ToolCalls {
-				argsBytes, err := json.Marshal(tc.Function.Arguments)
-				if err != nil {
-					argsBytes = []byte("{}")
+				// Un-escape XML entities in argument values. The model may
+				// reproduce &amp; / &lt; / &gt; it saw in the rendered template.
+				unescapeMapValues(tc.Function.Arguments)
+
+				// Use SetEscapeHTML(false) so & stays as real & (not \u0026).
+				var argsBuf bytes.Buffer
+				argEnc := json.NewEncoder(&argsBuf)
+				argEnc.SetEscapeHTML(false)
+				if err := argEnc.Encode(tc.Function.Arguments); err != nil {
+					argsBuf.Reset()
+					argsBuf.WriteString("{}")
 				}
 
 				msg.ToolCalls = append(msg.ToolCalls, ToolCall{
 					ID:        fmt.Sprintf("call_%d", time.Now().UnixNano()),
 					Type:      "function",
 					Name:      tc.Function.Name,
-					Arguments: string(argsBytes),
+					Arguments: strings.TrimSpace(argsBuf.String()),
 				})
 			}
 		}

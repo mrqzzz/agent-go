@@ -129,18 +129,18 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 			reminder := fmt.Sprintf("You stopped without completing the task. The user's original request was:\n\"%s\"\nPlease continue with the next remaining step. Use the tools to proceed.", userPrompt)
 
 			// Check if the last tool output had an interactive prompt.
-			for i := len(a.History) - 1; i >= 0; i-- {
-				if a.History[i].Role == llm.RoleTool {
-					lower := strings.ToLower(a.History[i].Content)
-					for _, pattern := range interactivePromptPatterns {
-						if strings.Contains(lower, strings.ToLower(pattern)) {
-							reminder = fmt.Sprintf("The terminal is waiting for input. Output was:\n%s\nThe user said to enter the required value. Use terminal_write to send it. Original request: \"%s\"", a.History[i].Content, userPrompt)
-							break
-						}
-					}
-					break
-				}
-			}
+			// for i := len(a.History) - 1; i >= 0; i-- {
+			// 	if a.History[i].Role == llm.RoleTool {
+			// 		lower := strings.ToLower(a.History[i].Content)
+			// 		for _, pattern := range interactivePromptPatterns {
+			// 			if strings.Contains(lower, strings.ToLower(pattern)) {
+			// 				reminder = fmt.Sprintf("The terminal is waiting for input. Output was:\n%s\nThe user said to enter the required value. Use terminal_write to send it. Original request: \"%s\"", a.History[i].Content, userPrompt)
+			// 				break
+			// 			}
+			// 		}
+			// 		break
+			// 	}
+			// }
 
 			a.History = append(a.History, llm.Message{
 				Role:    llm.RoleUser,

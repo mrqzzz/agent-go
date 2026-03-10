@@ -66,7 +66,7 @@ func main() {
 		if cfg.AI.APIKey != "" && cfg.AI.APIKey != "none" {
 			host = cfg.AI.APIKey
 		}
-		aiProvider = llm.NewOllama(host, cfg.AI.Model, cfg.AI.ContextSize)
+		aiProvider = llm.NewOllama(host, cfg.AI.Model, cfg.AI.ContextSize, *debug)
 		logf("🦙 AI Provider: Ollama (Host: %s, Ctx: %d)\n", host, cfg.AI.ContextSize)
 	default:
 		log.Fatalf("❌ Unsupported AI provider: '%s'. Use 'openai' or 'ollama'.", cfg.AI.Provider)
