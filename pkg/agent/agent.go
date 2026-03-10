@@ -143,7 +143,7 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 		errorCount = 0
 
 		for _, toolCall := range response.Message.ToolCalls {
-			a.logf("\n🔧  Call: %s%s%s \n    Args: %s%s%s\n", bgBlue, toolCall.Name, styleEnd, bgBlue, toolCall.Arguments, styleEnd)
+			a.logf("🔧  Tool Call:\n%s\n%s\n", gutterLines(toolCall.Name, gutterBlue), gutterLines(toolCall.Arguments, gutterBlue))
 
 			rawResult, err := a.executeTool(ctx, toolCall.Name, toolCall.Arguments)
 
@@ -168,10 +168,10 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 				lines := strings.Split(strings.TrimSpace(finalResult), "\n")
 				maxLines := 5000
 				if len(lines) <= maxLines {
-					a.logf("✅ Tool Output:\n\n%s%s%s%s\n\n", bgDarkGreen, italicStart, finalResult, styleEnd)
+					a.logf("✅ Tool Output:\n\n%s\n\n", gutterLines(finalResult, gutterGreen+italicStart))
 				} else {
 					preview := strings.Join(lines[:maxLines], "\n")
-					a.logf("✅ Tool Output (%d lines, showing first %d):\n\n%s%s%s%s\n   ...\n\n", len(lines), maxLines, bgDarkGreen, italicStart, preview, styleEnd)
+					a.logf("✅ Tool Output (%d lines, showing first %d):\n\n%s\n   ...\n\n", len(lines), maxLines, gutterLines(preview, gutterGreen+italicStart))
 				}
 			}
 
@@ -197,8 +197,8 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 
 const (
 	italicStart = "\x1b[3m"
-	bgBlue      = "\x1b[48;5;22m"
-	bgDarkGreen = "\x1b[48;5;24m"
+	gutterBlue  = "\x1b[38;5;39m"
+	gutterGreen = "\x1b[38;5;35m"
 	styleEnd    = "\x1b[0m"
 )
 
@@ -208,6 +208,19 @@ func (a *Agent) logln(msg string) {
 
 func (a *Agent) logf(format string, args ...interface{}) {
 	fmt.Printf("%s "+format, append([]interface{}{time.Now().Format("2006-01-02 15:04:05")}, args...)...)
+}
+
+func gutterLines(text string, gutterStyle string) string {
+	if text == "" {
+		return gutterStyle + "│ " + styleEnd
+	}
+
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		lines[i] = gutterStyle + "│ " + styleEnd + gutterStyle + line + styleEnd
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 // ansiRegex matches ANSI escape sequences, terminal control codes, and carriage returns.

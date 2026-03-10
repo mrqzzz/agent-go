@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -19,6 +21,7 @@ import (
 
 func main() {
 	debug := flag.Bool("debug", false, "Enable debug logs")
+	noHistory := flag.Bool("nohistory", false, "Disable saving readline history")
 	flag.Parse()
 
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
@@ -72,12 +75,24 @@ func main() {
 	// 4. Create agent
 	ag := agent.NewAgent(aiProvider, mcpClients, *debug)
 
+	if flag.NArg() > 0 {
+		if err := runBatchMode(ag, flag.Arg(0)); err != nil {
+			log.Fatalf("❌ Batch mode failed: %v", err)
+		}
+		return
+	}
+
 	// 5. Interactive loop (CLI)
 	printWelcomeMessage()
 
+	historyFile := "/tmp/agent-go-history"
+	if *noHistory {
+		historyFile = ""
+	}
+
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:          "👤 You > ",
-		HistoryFile:     "/tmp/agent-go-history",
+		HistoryFile:     historyFile,
 		InterruptPrompt: "^C",
 		EOFPrompt:       "exit",
 	})
@@ -108,20 +123,58 @@ func main() {
 			continue
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-
-		startTime := time.Now()
-		err = ag.Run(ctx, input)
-		duration := time.Since(startTime)
-
-		cancel()
-
-		if err != nil {
+		if err := runPrompt(ag, input); err != nil {
 			logf("❌ Execution error: %v\n", err)
-		} else {
-			logf("✨ Completed in %.2f seconds.\n", duration.Seconds())
 		}
 	}
+}
+
+func runBatchMode(ag *agent.Agent, promptFile string) error {
+	file, err := os.Open(promptFile)
+	if err != nil {
+		return fmt.Errorf("cannot open prompt file %q: %w", promptFile, err)
+	}
+	defer file.Close()
+
+	logf("📄 Running batch mode with prompt file: %s\n", promptFile)
+
+	scanner := bufio.NewScanner(file)
+	lineNumber := 0
+	for scanner.Scan() {
+		lineNumber++
+		prompt := strings.TrimSpace(scanner.Text())
+		if prompt == "" {
+			continue
+		}
+
+		logf("➡️  Batch prompt %d: %s\n", lineNumber, prompt)
+		if err := runPrompt(ag, prompt); err != nil {
+			return fmt.Errorf("line %d: %w", lineNumber, err)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("error reading prompt file %q: %w", promptFile, err)
+	}
+
+	logln("✅ Batch mode completed.")
+	return nil
+}
+
+func runPrompt(ag *agent.Agent, input string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	startTime := time.Now()
+	err := ag.Run(ctx, input)
+	duration := time.Since(startTime)
+
+	if err != nil {
+		return err
+	}
+
+	logf("✨ Completed in %.2f seconds.\n", duration.Seconds())
+	return nil
 }
 
 func printWelcomeMessage() {
