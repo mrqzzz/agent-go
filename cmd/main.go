@@ -67,7 +67,7 @@ func main() {
 			host = cfg.AI.APIKey
 		}
 		aiProvider = llm.NewOllama(host, cfg.AI.Model, cfg.AI.ContextSize, *debug)
-		logf("🦙 AI Provider: Ollama (Host: %s, Ctx: %d)\n", host, cfg.AI.ContextSize)
+		logf("🦙 AI Provider: Ollama (Host: %s, Model: %s, Ctx: %d)\n", host, cfg.AI.Model, cfg.AI.ContextSize)
 	default:
 		log.Fatalf("❌ Unsupported AI provider: '%s'. Use 'openai' or 'ollama'.", cfg.AI.Provider)
 	}
@@ -91,7 +91,7 @@ func main() {
 	}
 
 	rl, err := readline.NewEx(&readline.Config{
-		Prompt:          "👤 You > ",
+		Prompt:          "\033[38;5;202m▖\033[38;5;208m▗\033[38;5;214m▝\033[38;5;220m▞\033[38;5;226m█\033[0m ",
 		HistoryFile:     historyFile,
 		InterruptPrompt: "^C",
 		EOFPrompt:       "exit",
