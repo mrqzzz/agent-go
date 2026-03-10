@@ -36,7 +36,7 @@ type ToolDefinition struct {
 
 // Provider is the interface that every AI client must implement
 type Provider interface {
-	ChatCompletion(ctx context.Context, history []Message, tools []ToolDefinition) (*Response, error)
+	ChatCompletion(ctx context.Context, history []Message, tools []ToolDefinition, onDelta func(string)) (*Response, error)
 }
 
 type Response struct {

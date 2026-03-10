@@ -91,8 +91,23 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 	for turn := 0; ; turn++ {
 		a.logf("🧠 [Step %d] LLM reasoning in progress... ", turn+1)
 
+		streamStarted := false
+		onDelta := func(chunk string) {
+			if chunk == "" {
+				return
+			}
+			if !streamStarted {
+				fmt.Printf("\n%s 🤖 AGENT: ", time.Now().Format("2006-01-02 15:04:05"))
+				streamStarted = true
+			}
+			fmt.Print(chunk)
+		}
+
 		// A. Chiamata LLM
-		response, err := a.LLMClient.ChatCompletion(ctx, a.History, allTools)
+		response, err := a.LLMClient.ChatCompletion(ctx, a.History, allTools, onDelta)
+		if streamStarted {
+			fmt.Print("\n")
+		}
 		if err != nil {
 			a.logln("❌")
 			// Remove the user message we just added so the next Run()
@@ -111,7 +126,9 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 		if len(response.Message.ToolCalls) == 0 {
 			// Non-empty text answer: the model is truly done.
 			if strings.TrimSpace(response.Message.Content) != "" {
-				a.logf("🤖 AGENT: %s\n", response.Message.Content)
+				if !streamStarted {
+					a.logf("🤖 AGENT: %s\n", response.Message.Content)
+				}
 				return nil
 			}
 

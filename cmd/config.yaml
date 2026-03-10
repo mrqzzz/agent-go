@@ -1,11 +1,13 @@
 ai:
   provider: "ollama"
-  #model: "qwen3.5:latest" 
-  model: "qwen3-coder-next:latest" 
+  model: "qwen3.5:latest" 
+  #model: "qwen3-coder-next:latest" 
+  #model: "glm-4.7-flash:latest"
+  #model: "gpt-oss-safeguard:latest"
   api_key: "http://localhost:11434"
   context_size: 8192
-  max_history_lines: 50
-  max_history_messages: 1000
+  max_history_lines: 500
+  max_history_messages: 10000
 #  provider: "openai" # o "anthropic", "ollama"
 #  model: "gpt-4o"
 #  api_key: "sk-..."

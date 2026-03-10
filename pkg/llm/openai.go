@@ -1,12 +1,15 @@
 package llm
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
+	"strings"
 )
 
 type OpenAIProvider struct {
@@ -28,6 +31,7 @@ type openAIRequest struct {
 	Model    string       `json:"model"`
 	Messages []Message    `json:"messages"`
 	Tools    []openAITool `json:"tools,omitempty"`
+	Stream   bool         `json:"stream,omitempty"`
 }
 
 type openAITool struct {
@@ -52,7 +56,25 @@ type openAIResponse struct {
 	} `json:"choices"`
 }
 
-func (p *OpenAIProvider) ChatCompletion(ctx context.Context, history []Message, tools []ToolDefinition) (*Response, error) {
+type openAIStreamChunk struct {
+	Choices []struct {
+		Delta struct {
+			Role      string  `json:"role"`
+			Content   *string `json:"content"`
+			ToolCalls []struct {
+				Index    int    `json:"index"`
+				ID       string `json:"id"`
+				Type     string `json:"type"`
+				Function struct {
+					Name      string `json:"name"`
+					Arguments string `json:"arguments"`
+				} `json:"function"`
+			} `json:"tool_calls"`
+		} `json:"delta"`
+	} `json:"choices"`
+}
+
+func (p *OpenAIProvider) ChatCompletion(ctx context.Context, history []Message, tools []ToolDefinition, onDelta func(string)) (*Response, error) {
 	// 1. Prepare tools in OpenAI format
 	var oaTools []openAITool
 	if len(tools) > 0 {
@@ -68,6 +90,7 @@ func (p *OpenAIProvider) ChatCompletion(ctx context.Context, history []Message, 
 		Model:    p.Model,
 		Messages: history,
 		Tools:    oaTools,
+		Stream:   onDelta != nil,
 	}
 
 	jsonBody, err := json.Marshal(reqBody)
@@ -88,6 +111,98 @@ func (p *OpenAIProvider) ChatCompletion(ctx context.Context, history []Message, 
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	if onDelta != nil {
+		if resp.StatusCode != 200 {
+			body, _ := io.ReadAll(resp.Body)
+			return nil, fmt.Errorf("OpenAI API error: %s - %s", resp.Status, string(body))
+		}
+
+		msg := Message{}
+		toolByIndex := make(map[int]*ToolCall)
+
+		scanner := bufio.NewScanner(resp.Body)
+		buf := make([]byte, 0, 64*1024)
+		scanner.Buffer(buf, 1024*1024)
+
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" || strings.HasPrefix(line, ":") {
+				continue
+			}
+			if !strings.HasPrefix(line, "data:") {
+				continue
+			}
+
+			payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+			if payload == "[DONE]" {
+				break
+			}
+
+			var chunk openAIStreamChunk
+			if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
+				return nil, fmt.Errorf("failed to decode OpenAI stream chunk: %w", err)
+			}
+
+			for _, choice := range chunk.Choices {
+				d := choice.Delta
+				if d.Role != "" && msg.Role == "" {
+					msg.Role = d.Role
+				}
+				if d.Content != nil {
+					msg.Content += *d.Content
+					onDelta(*d.Content)
+				}
+				for _, tc := range d.ToolCalls {
+					entry, ok := toolByIndex[tc.Index]
+					if !ok {
+						entry = &ToolCall{}
+						toolByIndex[tc.Index] = entry
+					}
+					if tc.ID != "" {
+						entry.ID = tc.ID
+					}
+					if tc.Type != "" {
+						entry.Type = tc.Type
+					}
+					if tc.Function.Name != "" {
+						entry.Name = tc.Function.Name
+					}
+					if tc.Function.Arguments != "" {
+						entry.Arguments += tc.Function.Arguments
+					}
+				}
+			}
+		}
+
+		if err := scanner.Err(); err != nil {
+			return nil, fmt.Errorf("OpenAI stream read error: %w", err)
+		}
+
+		if msg.Role == "" {
+			msg.Role = RoleModel
+		}
+
+		if len(toolByIndex) > 0 {
+			indices := make([]int, 0, len(toolByIndex))
+			for idx := range toolByIndex {
+				indices = append(indices, idx)
+			}
+			sort.Ints(indices)
+			for _, idx := range indices {
+				tc := toolByIndex[idx]
+				if tc.ID == "" {
+					tc.ID = fmt.Sprintf("call_%d", idx)
+				}
+				if tc.Type == "" {
+					tc.Type = "function"
+				}
+				msg.ToolCalls = append(msg.ToolCalls, *tc)
+			}
+		}
+
+		return &Response{Message: msg}, nil
+	}
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {

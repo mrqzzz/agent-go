@@ -276,7 +276,7 @@ func (p *OllamaProvider) truncateHistory(history []Message, keepLast int) []Mess
 	return result
 }
 
-func (p *OllamaProvider) ChatCompletion(ctx context.Context, history []Message, tools []ToolDefinition) (*Response, error) {
+func (p *OllamaProvider) ChatCompletion(ctx context.Context, history []Message, tools []ToolDefinition, onDelta func(string)) (*Response, error) {
 	var oTools []ollamaTool
 	if len(tools) > 0 {
 		for _, t := range tools {
@@ -334,7 +334,7 @@ func (p *OllamaProvider) ChatCompletion(ctx context.Context, history []Message, 
 			Model:    p.Model,
 			Messages: toOllamaMessages(msgs),
 			Tools:    sendTools,
-			Stream:   false,
+			Stream:   onDelta != nil,
 			Options: map[string]interface{}{
 				"num_ctx":     p.ContextSize,
 				"temperature": currentTemp,
@@ -369,16 +369,74 @@ func (p *OllamaProvider) ChatCompletion(ctx context.Context, history []Message, 
 		}
 		defer resp.Body.Close()
 
-		body, _ := io.ReadAll(resp.Body)
-		fmt.Printf("Received in %.2fs! ⚡️\n", time.Since(start).Seconds())
+		if onDelta == nil {
+			body, _ := io.ReadAll(resp.Body)
+			fmt.Printf("Received in %.2fs! ⚡️\n", time.Since(start).Seconds())
 
-		// Error handling
+			// Error handling
+			if resp.StatusCode != 200 {
+				errMsg := string(body)
+				isXmlError := strings.Contains(errMsg, "XML syntax error") || strings.Contains(errMsg, "unexpected end element")
+
+				if resp.StatusCode == 500 && isXmlError {
+					// Log the request body that caused the error
+					if p.Debug {
+						fmt.Printf("\n📝 [DEBUG] Request Body (Glitch T=%d):\n%s\n\n", attempt, string(jsonBody))
+					}
+					fmt.Printf("⚠️  Ollama glitch: %s. Retrying in 1s...\n", strings.TrimSpace(errMsg))
+					lastErr = fmt.Errorf("Ollama XML Error: %s", errMsg)
+					xmlErrorCount++
+					time.Sleep(1 * time.Second)
+					continue
+				}
+
+				return nil, fmt.Errorf("Ollama API error (%d): %s", resp.StatusCode, errMsg)
+			}
+
+			// Parse response
+			var oResp ollamaResponse
+			if err := json.Unmarshal(body, &oResp); err != nil {
+				return nil, fmt.Errorf("error decoding Ollama JSON: %w", err)
+			}
+
+			msg := Message{
+				Role:    oResp.Message.Role,
+				Content: oResp.Message.Content,
+			}
+
+			if len(oResp.Message.ToolCalls) > 0 {
+				for _, tc := range oResp.Message.ToolCalls {
+					// Un-escape XML entities in argument values. The model may
+					// reproduce &amp; / &lt; / &gt; it saw in the rendered template.
+					unescapeMapValues(tc.Function.Arguments)
+
+					// Use SetEscapeHTML(false) so & stays as real & (not \u0026).
+					var argsBuf bytes.Buffer
+					argEnc := json.NewEncoder(&argsBuf)
+					argEnc.SetEscapeHTML(false)
+					if err := argEnc.Encode(tc.Function.Arguments); err != nil {
+						argsBuf.Reset()
+						argsBuf.WriteString("{}")
+					}
+
+					msg.ToolCalls = append(msg.ToolCalls, ToolCall{
+						ID:        fmt.Sprintf("call_%d", time.Now().UnixNano()),
+						Type:      "function",
+						Name:      tc.Function.Name,
+						Arguments: strings.TrimSpace(argsBuf.String()),
+					})
+				}
+			}
+
+			return &Response{Message: msg}, nil
+		}
+
 		if resp.StatusCode != 200 {
+			body, _ := io.ReadAll(resp.Body)
 			errMsg := string(body)
 			isXmlError := strings.Contains(errMsg, "XML syntax error") || strings.Contains(errMsg, "unexpected end element")
 
 			if resp.StatusCode == 500 && isXmlError {
-				// Log the request body that caused the error
 				if p.Debug {
 					fmt.Printf("\n📝 [DEBUG] Request Body (Glitch T=%d):\n%s\n\n", attempt, string(jsonBody))
 				}
@@ -392,24 +450,44 @@ func (p *OllamaProvider) ChatCompletion(ctx context.Context, history []Message, 
 			return nil, fmt.Errorf("Ollama API error (%d): %s", resp.StatusCode, errMsg)
 		}
 
-		// Parse response
-		var oResp ollamaResponse
-		if err := json.Unmarshal(body, &oResp); err != nil {
-			return nil, fmt.Errorf("error decoding Ollama JSON: %w", err)
+		fmt.Printf("Streaming in %.2fs... ⚡️\n", time.Since(start).Seconds())
+
+		var aggregated ollamaResponse
+		aggregated.Message.Role = RoleModel
+		decoder := json.NewDecoder(resp.Body)
+		for {
+			var chunk ollamaResponse
+			if err := decoder.Decode(&chunk); err != nil {
+				if err == io.EOF {
+					break
+				}
+				return nil, fmt.Errorf("error decoding Ollama stream: %w", err)
+			}
+
+			if aggregated.Message.Role == "" && chunk.Message.Role != "" {
+				aggregated.Message.Role = chunk.Message.Role
+			}
+			if chunk.Message.Content != "" {
+				aggregated.Message.Content += chunk.Message.Content
+				onDelta(chunk.Message.Content)
+			}
+			if len(chunk.Message.ToolCalls) > 0 {
+				aggregated.Message.ToolCalls = chunk.Message.ToolCalls
+			}
+			if chunk.Done {
+				break
+			}
 		}
 
 		msg := Message{
-			Role:    oResp.Message.Role,
-			Content: oResp.Message.Content,
+			Role:    aggregated.Message.Role,
+			Content: aggregated.Message.Content,
 		}
 
-		if len(oResp.Message.ToolCalls) > 0 {
-			for _, tc := range oResp.Message.ToolCalls {
-				// Un-escape XML entities in argument values. The model may
-				// reproduce &amp; / &lt; / &gt; it saw in the rendered template.
+		if len(aggregated.Message.ToolCalls) > 0 {
+			for _, tc := range aggregated.Message.ToolCalls {
 				unescapeMapValues(tc.Function.Arguments)
 
-				// Use SetEscapeHTML(false) so & stays as real & (not \u0026).
 				var argsBuf bytes.Buffer
 				argEnc := json.NewEncoder(&argsBuf)
 				argEnc.SetEscapeHTML(false)
