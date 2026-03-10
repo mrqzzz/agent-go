@@ -18,14 +18,16 @@ type Agent struct {
 	MCPClients []*mcp.Client
 	History    []llm.Message
 	MaxErrors  int
+	Debug      bool
 }
 
-func NewAgent(llmProvider llm.Provider, mcpServers []*mcp.Client) *Agent {
+func NewAgent(llmProvider llm.Provider, mcpServers []*mcp.Client, debug bool) *Agent {
 	return &Agent{
 		LLMClient:  llmProvider,
 		MCPClients: mcpServers,
 		MaxErrors:  5,
 		History:    make([]llm.Message, 0),
+		Debug:      debug,
 	}
 }
 
@@ -52,7 +54,7 @@ MULTI-STEP TASKS:
 - Do NOT stop after the first command. Keep calling tools until every part of the request is fulfilled.
 - Example: if asked to "cd somewhere, list files, then do X", you must call tools for cd, ls, and X in sequence.
 
-INTERACTIVE SESSIONS:
+INTERACTIVE SESSIONS USING THE MCP-SHELL TOOL:
 The shell is a persistent, stateful pseudo-terminal. Interactive programs like ssh, sudo, python, and others work naturally.
 - To start an interactive command, call terminal_write with the command (e.g. "ssh root@server.com").
 - The command may take time to produce output. After calling terminal_write, call terminal_read to check for new output such as password prompts, confirmation questions, or login banners.
@@ -72,17 +74,17 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 
 	allTools := a.aggregateTools(ctx)
 
-	fmt.Println("--- 🧠 Agent reasoning... ---")
+	a.logln("🤖 Agent calling LLM...")
 
 	errorCount := 0
 	blankCount := 0
 	for turn := 0; ; turn++ {
-		fmt.Printf("🔄 [Turn %d] LLM analysis in progress... ", turn+1)
+		a.logf("🧠 [Step %d] LLM reasoning in progress... ", turn+1)
 
 		// A. Chiamata LLM
 		response, err := a.LLMClient.ChatCompletion(ctx, a.History, allTools)
 		if err != nil {
-			fmt.Println("❌")
+			a.logln("❌")
 			// Remove the user message we just added so the next Run()
 			// won't produce consecutive user messages in history.
 			if len(a.History) > 0 && a.History[len(a.History)-1].Role == llm.RoleUser {
@@ -90,23 +92,25 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 			}
 			return fmt.Errorf("critical LLM error: %w", err)
 		}
-		fmt.Println("Ok (Received action plan) ✨")
+		if a.Debug {
+			a.logln("Ok (Received action plan) ✨")
+		}
 
 		a.History = append(a.History, response.Message)
 
 		if len(response.Message.ToolCalls) == 0 {
 			// Non-empty text answer: the model is truly done.
 			if strings.TrimSpace(response.Message.Content) != "" {
-				fmt.Printf("\n🤖 AGENT: %s\n", response.Message.Content)
+				a.logf("🤖 AGENT: %s\n", response.Message.Content)
 				return nil
 			}
 
 			blankCount++
 			if blankCount > a.MaxErrors {
-				fmt.Println("\n🤖 AGENT: (completed)")
+				a.logln("🤖 AGENT: (completed)")
 				return nil
 			}
-			fmt.Printf("(blank response %d/%d, continuing...)\n", blankCount, a.MaxErrors)
+			a.logf("(blank response %d/%d, continuing...)\n", blankCount, a.MaxErrors)
 
 			// Remove the blank assistant message — we'll inject a user reminder instead.
 			a.History = a.History[:len(a.History)-1]
@@ -139,7 +143,7 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 		errorCount = 0
 
 		for _, toolCall := range response.Message.ToolCalls {
-			fmt.Printf("🛠  Tool Call: %s \n   Args: %s\n", toolCall.Name, toolCall.Arguments)
+			a.logf("🔧  Tool Call: %s \n   Args: %s\n", toolCall.Name, toolCall.Arguments)
 
 			rawResult, err := a.executeTool(ctx, toolCall.Name, toolCall.Arguments)
 
@@ -155,7 +159,7 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 			finalResult := a.sanitizeOutput(toolCall.Arguments, rawResult, err)
 
 			if err != nil {
-				fmt.Printf("⚠️  Tool Error: %v\n", err)
+				a.logf("⚠️  Tool Error: %v\n", err)
 				errorCount++
 				if errorCount >= a.MaxErrors {
 					return fmt.Errorf("reached maximum limit of %d consecutive tool errors", a.MaxErrors)
@@ -164,10 +168,10 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 				lines := strings.Split(strings.TrimSpace(finalResult), "\n")
 				maxLines := 5000
 				if len(lines) <= maxLines {
-					fmt.Printf("✅ Tool Output:\n%s\n", finalResult)
+					a.logf("✅ Tool Output:\n\n%s%s%s\n\n", italicStart, finalResult, italicEnd)
 				} else {
 					preview := strings.Join(lines[:maxLines], "\n")
-					fmt.Printf("✅ Tool Output (%d lines, showing first %d):\n%s\n   ...\n", len(lines), maxLines, preview)
+					a.logf("✅ Tool Output (%d lines, showing first %d):\n\n%s%s%s\n   ...\n\n", len(lines), maxLines, italicStart, preview, italicEnd)
 				}
 			}
 
@@ -189,6 +193,19 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 
 		time.Sleep(200 * time.Millisecond)
 	}
+}
+
+const (
+	italicStart = "\x1b[3m"
+	italicEnd   = "\x1b[0m"
+)
+
+func (a *Agent) logln(msg string) {
+	fmt.Printf("%s %s\n", time.Now().Format("2006-01-02 15:04:05"), msg)
+}
+
+func (a *Agent) logf(format string, args ...interface{}) {
+	fmt.Printf("%s "+format, append([]interface{}{time.Now().Format("2006-01-02 15:04:05")}, args...)...)
 }
 
 // ansiRegex matches ANSI escape sequences, terminal control codes, and carriage returns.

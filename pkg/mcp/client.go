@@ -17,6 +17,7 @@ import (
 
 type Client struct {
 	Name    string
+	Debug   bool
 	cmd     *exec.Cmd
 	stdin   io.WriteCloser
 	stdout  io.ReadCloser
@@ -60,7 +61,7 @@ type mcpCallToolResult struct {
 	IsError bool `json:"isError"`
 }
 
-func NewClient(name string, command string, args []string) (*Client, error) {
+func NewClient(name string, command string, args []string, debug bool) (*Client, error) {
 	cmd := exec.Command(command, args...)
 
 	// Stdin pipe
@@ -83,6 +84,7 @@ func NewClient(name string, command string, args []string) (*Client, error) {
 
 	client := &Client{
 		Name:    name,
+		Debug:   debug,
 		cmd:     cmd,
 		stdin:   stdin,
 		stdout:  stdout,
@@ -203,7 +205,9 @@ func (c *Client) call(ctx context.Context, method string, params interface{}) (j
 
 func (c *Client) CallTool(ctx context.Context, toolName string, argsJSON string) (string, error) {
 	// --- LOG START ---
-	log.Printf("🚀 [%s] START CallTool: %s | Args: %s", c.Name, toolName, argsJSON)
+	if c.Debug {
+		log.Printf("🚀 [%s] START CallTool: %s | Args: %s", c.Name, toolName, argsJSON)
+	}
 	startTime := time.Now()
 	// -----------------
 
@@ -235,7 +239,9 @@ func (c *Client) CallTool(ctx context.Context, toolName string, argsJSON string)
 		return "", err
 	}
 
-	log.Printf("🏁 [%s] END CallTool: %s | Durata: %v", c.Name, toolName, duration)
+	if c.Debug {
+		log.Printf("🏁 [%s] END CallTool: %s | Durata: %v", c.Name, toolName, duration)
+	}
 	// ---------------------------------
 
 	var result mcpCallToolResult

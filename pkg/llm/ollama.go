@@ -248,7 +248,7 @@ func (p *OllamaProvider) ChatCompletion(ctx context.Context, history []Message, 
 		req.Close = true // Force close header on client side
 
 		// Debug timing log
-		fmt.Printf("⏳ [Attempt %d | T=%.1f] Sending to Ollama... ", attempt, currentTemp)
+		fmt.Printf("⏳ [Attempt %d | T=%.1f] Sending to %s... ", attempt, currentTemp, p.Model)
 		start := time.Now()
 
 		resp, err := p.Client.Do(req)

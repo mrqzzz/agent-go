@@ -3,3 +3,4 @@
 pkg/.DS_Store
 cmd/.DS_Store
 cmd/agent-go
+.DS_Store
