@@ -10,6 +10,8 @@ Simple Agent with prompt and tooling capabilities.
 - Request to do several tasks with one prompt (it works if the LLM Model is smart enough to handle it)
 - The prompts history is saved to `/tmp/agent-go-history`, run with `--nohistory=true` to prevent saving the history to file
 
+This agent works well with "shell-mcp" https://github.com/mrqzzz/shell-mcp to execute shell commands in a stateful way.
+
 <img width="800" height="436" alt="image" src="https://github.com/user-attachments/assets/314c5d79-155b-4534-a8b5-ba937b03edad" />
 
 
@@ -65,6 +67,10 @@ For example, run  `./agent-go prompts.txt >log.txt` — each line of `prompts.tx
 ### LLM temperature on failure
 
 Behavior: If a command fails, the agent slightly increases the LLM's temperature parameter so the model can try alternative solutions. The change is small and temporary to encourage different approaches without making outputs wildly random.
+
+### Context rot
+
+Yes it rots, so work with few well designed prompts.
 
 ### MCP servers & prompt guidance
 
