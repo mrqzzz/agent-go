@@ -1,22 +1,16 @@
 ai:
+  provider: "ollama"
+  model: "qwen3.5:latest" 
+  api_key: "http://localhost:11434"
+  context_size: 8192
 #  provider: "openai" # o "anthropic", "ollama"
 #  model: "gpt-4o"
 #  api_key: "sk-..."
-
-  provider: "ollama"
-  model: "qwen3.5:latest" 
-#  model: "glm-4.7-flash:latest" 
-  api_key: "http://localhost:11434"
-  context_size: 8192
 
 mcp_servers:
   shell-mcp:
     command: "/Users/marcus.oblak/go/src/github.com/mrqzzz/shell-mcp/shell-mcp" 
     args: [] 
-  tutorial-somma:
-    command: "npx"
-    args: ["-y", "tsx", "/Users/marcus.oblak/go/src/github.com/mrqzzz/MCP-server-1/index.ts"]
-
 #  filesystem:
 #    command: "npx"
 #    args: ["-y", "@modelcontextprotocol/server-filesystem", "/Users/me/Desktop"]
