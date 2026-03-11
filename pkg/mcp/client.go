@@ -16,17 +16,18 @@ import (
 )
 
 type Client struct {
-	Name    string
-	Debug   bool
-	cmd     *exec.Cmd
-	stdin   io.WriteCloser
-	stdout  io.ReadCloser
-	stderr  io.ReadCloser // Read tool errors
-	seq     int
-	pending map[int]chan jsonRPCResponse
-	mu      sync.Mutex
-	closed  chan struct{}
-	tools   map[string]bool
+	Name            string
+	Debug           bool
+	InternalTimeout time.Duration
+	cmd             *exec.Cmd
+	stdin           io.WriteCloser
+	stdout          io.ReadCloser
+	stderr          io.ReadCloser // Read tool errors
+	seq             int
+	pending         map[int]chan jsonRPCResponse
+	mu              sync.Mutex
+	closed          chan struct{}
+	tools           map[string]bool
 }
 
 // JSON-RPC structures
@@ -61,7 +62,11 @@ type mcpCallToolResult struct {
 	IsError bool `json:"isError"`
 }
 
-func NewClient(name string, command string, args []string, debug bool) (*Client, error) {
+func NewClient(name string, command string, args []string, debug bool, internalTimeout time.Duration) (*Client, error) {
+	if internalTimeout <= 0 {
+		internalTimeout = 2 * time.Minute
+	}
+
 	cmd := exec.Command(command, args...)
 
 	// Stdin pipe
@@ -83,15 +88,16 @@ func NewClient(name string, command string, args []string, debug bool) (*Client,
 	}
 
 	client := &Client{
-		Name:    name,
-		Debug:   debug,
-		cmd:     cmd,
-		stdin:   stdin,
-		stdout:  stdout,
-		stderr:  stderr,
-		pending: make(map[int]chan jsonRPCResponse),
-		closed:  make(chan struct{}),
-		tools:   make(map[string]bool),
+		Name:            name,
+		Debug:           debug,
+		InternalTimeout: internalTimeout,
+		cmd:             cmd,
+		stdin:           stdin,
+		stdout:          stdout,
+		stderr:          stderr,
+		pending:         make(map[int]chan jsonRPCResponse),
+		closed:          make(chan struct{}),
+		tools:           make(map[string]bool),
 	}
 
 	if err := cmd.Start(); err != nil {
@@ -197,9 +203,9 @@ func (c *Client) call(ctx context.Context, method string, params interface{}) (j
 	case <-c.closed:
 		return nil, fmt.Errorf("MCP connection closed unexpectedly")
 
-	case <-time.After(30 * time.Second): // Internal safety timeout
+	case <-time.After(c.InternalTimeout): // Internal safety timeout
 		log.Printf("⏰ [%s] Internal TIMEOUT on call ID %d", c.Name, id)
-		return nil, fmt.Errorf("TIMEOUT: Tool '%s' did not respond in 30s", c.Name)
+		return nil, fmt.Errorf("TIMEOUT: Tool '%s' did not respond in %s", c.Name, c.InternalTimeout)
 	}
 }
 

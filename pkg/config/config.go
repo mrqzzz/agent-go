@@ -22,8 +22,9 @@ type AIConfig struct {
 }
 
 type MCPServerConfig struct {
-	Command string   `yaml:"command"`
-	Args    []string `yaml:"args"`
+	Command         string   `yaml:"command"`
+	Args            []string `yaml:"args"`
+	InternalTimeout string   `yaml:"internal_timeout"` // e.g. "2m"
 }
 
 func LoadConfig(path string) (*Config, error) {

@@ -41,6 +41,7 @@ add MCP servers (tools) :
 mcp_servers:
   shell-mcp:
     command: "/Users/marcus.oblak/go/src/github.com/mrqzzz/shell-mcp/shell-mcp" 
+    internal_timeout: "2m"
     args: [] 
 ```
 

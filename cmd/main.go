@@ -38,13 +38,25 @@ func main() {
 	if len(cfg.MCPServers) > 0 {
 		logln("🔌 Connecting to MCP servers...")
 		for name, serverCfg := range cfg.MCPServers {
-			client, err := mcp.NewClient(name, serverCfg.Command, serverCfg.Args, *debug)
+			internalTimeout := 2 * time.Minute
+			if strings.TrimSpace(serverCfg.InternalTimeout) != "" {
+				d, parseErr := time.ParseDuration(serverCfg.InternalTimeout)
+				if parseErr != nil {
+					logf("⚠️  Invalid mcp_servers.%s.internal_timeout value %q, using default %s\n", name, serverCfg.InternalTimeout, internalTimeout)
+				} else if d > 0 {
+					internalTimeout = d
+				} else {
+					logf("⚠️  mcp_servers.%s.internal_timeout must be > 0, using default %s\n", name, internalTimeout)
+				}
+			}
+
+			client, err := mcp.NewClient(name, serverCfg.Command, serverCfg.Args, *debug, internalTimeout)
 			if err != nil {
 				log.Printf("⚠️  Warning: Cannot start MCP server '%s': %v", name, err)
 				continue
 			}
 			mcpClients = append(mcpClients, client)
-			logf("   ✅ Connected to: %s (cmd: %s)\n", name, serverCfg.Command)
+			logf("   ✅ Connected to: %s (cmd: %s, internal timeout: %s)\n", name, serverCfg.Command, internalTimeout)
 		}
 	} else {
 		logln("ℹ️  No MCP servers configured. The agent will work in conversation-only mode.")
