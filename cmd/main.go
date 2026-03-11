@@ -85,7 +85,11 @@ func main() {
 	}
 
 	// 4. Create agent
-	ag := agent.NewAgent(aiProvider, mcpClients, *debug, cfg.AI.MaxHistoryLines, cfg.AI.MaxHistoryMessages)
+	escapeHistory := false
+	if cfg.AI.EscapeHistory != nil {
+		escapeHistory = *cfg.AI.EscapeHistory
+	}
+	ag := agent.NewAgent(aiProvider, mcpClients, *debug, escapeHistory, cfg.AI.MaxHistoryLines, cfg.AI.MaxHistoryMessages)
 	promptTimeout := 5 * time.Minute
 	if strings.TrimSpace(cfg.AI.PromptTimeout) != "" {
 		d, err := time.ParseDuration(cfg.AI.PromptTimeout)

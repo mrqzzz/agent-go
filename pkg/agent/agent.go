@@ -19,11 +19,12 @@ type Agent struct {
 	History            []llm.Message
 	MaxErrors          int
 	Debug              bool
+	EscapeHistory      bool
 	MaxHistoryLines    int
 	MaxHistoryMessages int
 }
 
-func NewAgent(llmProvider llm.Provider, mcpServers []*mcp.Client, debug bool, maxHistoryLines, maxHistoryMessages int) *Agent {
+func NewAgent(llmProvider llm.Provider, mcpServers []*mcp.Client, debug bool, escapeHistory bool, maxHistoryLines, maxHistoryMessages int) *Agent {
 	if maxHistoryLines <= 0 {
 		maxHistoryLines = 15
 	}
@@ -36,6 +37,7 @@ func NewAgent(llmProvider llm.Provider, mcpServers []*mcp.Client, debug bool, ma
 		MaxErrors:          5,
 		History:            make([]llm.Message, 0),
 		Debug:              debug,
+		EscapeHistory:      escapeHistory,
 		MaxHistoryLines:    maxHistoryLines,
 		MaxHistoryMessages: maxHistoryMessages,
 	}
@@ -202,11 +204,15 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 				}
 			}
 
+			clean := stripANSI(finalResult)
+			if a.EscapeHistory {
+				clean = escapeForHistory(clean)
+			}
 			a.History = append(a.History, llm.Message{
 				Role:       llm.RoleTool,
 				ToolCallID: toolCall.ID,
 				Name:       toolCall.Name,
-				Content:    truncateForHistory(stripANSI(finalResult), a.MaxHistoryLines),
+				Content:    truncateForHistory(clean, a.MaxHistoryLines),
 			})
 		}
 
@@ -256,10 +262,16 @@ func gutterLines(text string, gutterStyle string) string {
 // ansiRegex matches ANSI escape sequences, terminal control codes, and carriage returns.
 var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b\][^\x1b]*\x1b\\|\x1b[()][A-Z0-9]|\x1b[>=<]|\x07|\x08.|\r`)
 
-// stripANSI removes ANSI escape sequences and XML-unsafe characters from s
-// to prevent them from breaking the LLM's XML chat template.
+// stripANSI removes ANSI escape sequences from s.
 func stripANSI(s string) string {
-	s = ansiRegex.ReplaceAllString(s, "")
+	return ansiRegex.ReplaceAllString(s, "")
+}
+
+// escapeForHistory destructively replaces XML-unsafe characters (<, >, &)
+// so they don't break LLM chat templates that use XML internally (e.g. Qwen).
+// This corrupts symbols in code, so it should only be enabled when the
+// provider's own escaping is insufficient.
+func escapeForHistory(s string) string {
 	s = strings.ReplaceAll(s, "&", "+")
 	s = strings.ReplaceAll(s, "<", "(")
 	s = strings.ReplaceAll(s, ">", ")")

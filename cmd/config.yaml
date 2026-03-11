@@ -1,11 +1,12 @@
 ai:
   provider: "ollama"
-  #model: "qwen3.5:latest" 
-  model: "qwen3-coder-next:latest" 
+  model: "qwen3.5:latest" 
+  #model: "qwen3-coder-next:latest" 
   #model: "glm-4.7-flash:latest"
   #model: "gpt-oss-safeguard:latest"
   api_key: "http://localhost:11434"
   prompt_timeout: "20m"
+  escape_history: false
   context_size: 12192
   max_history_lines: 50000
   max_history_messages: 10000
