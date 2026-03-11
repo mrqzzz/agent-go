@@ -189,7 +189,7 @@ func runPrompt(ag *agent.Agent, input string, promptTimeout time.Duration) error
 		return err
 	}
 
-	logf("✨ Completed in %.2f seconds.\n", duration.Seconds())
+	logf("\n✨ Completed in %.2f seconds.\n", duration.Seconds())
 	return nil
 }
 
