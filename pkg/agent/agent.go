@@ -84,7 +84,7 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 
 	allTools := a.aggregateTools(ctx)
 
-	a.logln("🤖 Agent calling LLM...")
+	a.logln("🤖 agent-go calling LLM...")
 
 	errorCount := 0
 	blankCount := 0
@@ -97,7 +97,7 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 				return
 			}
 			if !streamStarted {
-				fmt.Printf("\n%s 🤖 AGENT: ", time.Now().Format("2006-01-02 15:04:05"))
+				fmt.Printf("\n%s 🤖 AGENT-GO: ", time.Now().Format("2006-01-02 15:04:05"))
 				streamStarted = true
 			}
 			fmt.Print(chunk)
@@ -134,7 +134,7 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 
 			blankCount++
 			if blankCount > a.MaxErrors {
-				a.logln("🤖 AGENT: (completed)")
+				a.logln("🤖 AGENT-GO: (completed)")
 				return nil
 			}
 			a.logf("(blank response %d/%d, continuing...)\n", blankCount, a.MaxErrors)

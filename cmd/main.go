@@ -101,12 +101,25 @@ func main() {
 	if *noHistory {
 		historyFile = ""
 	}
+	defaultPrompt := "\033[38;5;202m▖\033[38;5;208m▗\033[38;5;214m▝\033[38;5;220m▞\033[38;5;226m█\033[0m "
+	continuationPrompt := "\033[38;5;244m...\033[0m "
+	continueLine := false
+	collectedLines := make([]string, 0)
 
 	rl, err := readline.NewEx(&readline.Config{
-		Prompt:          "\033[38;5;202m▖\033[38;5;208m▗\033[38;5;214m▝\033[38;5;220m▞\033[38;5;226m█\033[0m ",
+		Prompt:          defaultPrompt,
 		HistoryFile:     historyFile,
 		InterruptPrompt: "^C",
 		EOFPrompt:       "exit",
+		FuncFilterInputRune: func(r rune) (rune, bool) {
+			// In most terminals Ctrl+Enter is delivered as Ctrl+J (LF).
+			// Treat it as "continue to next line" rather than submit.
+			if r == readline.CharCtrlJ {
+				continueLine = true
+				return readline.CharEnter, true
+			}
+			return r, true
+		},
 	})
 	if err != nil {
 		log.Fatalf("❌ Cannot initialize readline: %v", err)
@@ -124,7 +137,29 @@ func main() {
 			continue
 		}
 
+		rawInput := input
 		input = strings.TrimSpace(input)
+
+		if continueLine {
+			if input != "" {
+				collectedLines = append(collectedLines, input)
+			}
+			continueLine = false
+			rl.SetPrompt(continuationPrompt)
+			continue
+		}
+
+		if len(collectedLines) > 0 {
+			if input != "" {
+				collectedLines = append(collectedLines, strings.TrimSpace(rawInput))
+			}
+			if err := runBatchLines(ag, collectedLines, promptTimeout); err != nil {
+				logf("❌ Execution error: %v\n", err)
+			}
+			collectedLines = collectedLines[:0]
+			rl.SetPrompt(defaultPrompt)
+			continue
+		}
 
 		if input == "exit" || input == "quit" {
 			logln("👋 Agent terminated. Goodbye!")
@@ -151,10 +186,28 @@ func runBatchMode(ag *agent.Agent, promptFile string, promptTimeout time.Duratio
 	logf("📄 Running batch mode with prompt file: %s\n", promptFile)
 
 	scanner := bufio.NewScanner(file)
-	lineNumber := 0
+	lines := make([]string, 0)
 	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("error reading prompt file %q: %w", promptFile, err)
+	}
+
+	if err := runBatchLines(ag, lines, promptTimeout); err != nil {
+		return err
+	}
+
+	logln("✅ Batch mode completed.")
+	return nil
+}
+
+func runBatchLines(ag *agent.Agent, lines []string, promptTimeout time.Duration) error {
+	lineNumber := 0
+	for _, line := range lines {
 		lineNumber++
-		prompt := strings.TrimSpace(scanner.Text())
+		prompt := strings.TrimSpace(line)
 		if prompt == "" {
 			continue
 		}
@@ -164,12 +217,6 @@ func runBatchMode(ag *agent.Agent, promptFile string, promptTimeout time.Duratio
 			return fmt.Errorf("line %d: %w", lineNumber, err)
 		}
 	}
-
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("error reading prompt file %q: %w", promptFile, err)
-	}
-
-	logln("✅ Batch mode completed.")
 	return nil
 }
 
@@ -197,6 +244,7 @@ func printWelcomeMessage() {
 	logln(strings.Repeat("=", 60))
 	logln("   🤖  AGENT-GO - READY")
 	logln("   Type your request. The agent will use tools as needed.")
+	logln("   Use Ctrl+J (Ctrl+Enter in many terminals) for multiline input.")
 	logln("   Type 'exit' to quit.")
 	logln(strings.Repeat("=", 60))
 }
