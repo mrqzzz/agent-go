@@ -4,8 +4,9 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*' # Triggera il workflow quando carichi un tag che inizia con 'v' (es. v1.0.0)
   pull_request:
-  # This line adds a manual "Run workflow" button in the GitHub Actions tab
   workflow_dispatch:
 
 jobs:
@@ -33,14 +34,51 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-          # Adding caching to speed up builds and save free minutes
           cache: true
 
       - name: Download dependencies
         run: go mod download
 
-      - name: Build cmd/main.go
+      - name: Build binary
         env:
           GOOS: ${{ matrix.target.goos }}
           GOARCH: ${{ matrix.target.goarch }}
-        run: go build -v -o bin/main-${{ matrix.target.goos }}-${{ matrix.target.goarch }} ./cmd/main.go
+        # Definiamo il nome del file in base alla piattaforma
+        run: |
+          BINARY_NAME=agent-go-${{ matrix.target.goos }}-${{ matrix.target.goarch }}
+          if [ "${{ matrix.target.goos }}" = "windows" ]; then
+            BINARY_NAME="${BINARY_NAME}.exe"
+          fi
+          go build -v -o "bin/${BINARY_NAME}" ./cmd/main.go
+          echo "BINARY_PATH=bin/${BINARY_NAME}" >> $GITHUB_ENV
+          echo "BINARY_NAME=${BINARY_NAME}" >> $GITHUB_ENV
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BINARY_NAME }}
+          path: ${{ env.BINARY_PATH }}
+
+  # Questo job gira solo quando carichi un tag (es. git push origin v1.0.0)
+  release:
+    name: Create GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./artifacts/**/*
+          generate_release_notes: true
+
