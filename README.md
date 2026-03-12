@@ -13,7 +13,7 @@ Simple Agent with prompt and tooling capabilities.
 This agent works well with **shell-mcp** https://github.com/mrqzzz/shell-mcp to execute shell commands in a stateful way.
 
 
-## flow
+## Flow
 
 ```mermaid
 flowchart TD
