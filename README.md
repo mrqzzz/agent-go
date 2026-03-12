@@ -29,7 +29,7 @@ flowchart TD
     %% =========================
     %% Horizontal Alignment (Invisible)
     %% =========================
-    User ~~~ Agent ~~~ LLM ~~~ Server ~~~ Client
+    User ~~~ Agent ~~~ LLM ~~~ Client ~~~ Server
 
     %% =========================
     %% Left Column: User
