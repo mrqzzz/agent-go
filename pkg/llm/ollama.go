@@ -164,6 +164,8 @@ func escapeMapValues(m map[string]interface{}) {
 // escapeXMLContent replaces characters that break Qwen's XML chat template.
 func escapeXMLContent(s string) string {
 	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "\"", "&quot;")
+	s = strings.ReplaceAll(s, "'", "&apos;")
 	s = strings.ReplaceAll(s, "<", "&lt;")
 	s = strings.ReplaceAll(s, ">", "&gt;")
 	return s
@@ -173,6 +175,8 @@ func escapeXMLContent(s string) string {
 // The model may reproduce XML entities it saw in the rendered template,
 // so we un-escape them to recover the raw values.
 func unescapeXMLContent(s string) string {
+	s = strings.ReplaceAll(s, "&quot;", "\"")
+	s = strings.ReplaceAll(s, "&apos;", "'")
 	s = strings.ReplaceAll(s, "&lt;", "<")
 	s = strings.ReplaceAll(s, "&gt;", ">")
 	s = strings.ReplaceAll(s, "&amp;", "&")

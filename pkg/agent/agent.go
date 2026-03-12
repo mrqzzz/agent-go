@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -184,18 +185,20 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 				}
 			}
 
-			// If the shell is still waiting in heredoc mode, auto-send EOF once to recover.
-			if err == nil && toolCall.Name == "terminal_write" && isLikelyHeredocWaiting(rawResult) {
-				a.logln("⚠️  Detected pending heredoc input; sending EOF to recover terminal state.")
-				if _, eofErr := a.executeTool(ctx, "terminal_write", `{"command":"EOF"}`); eofErr == nil {
+			// If the shell is waiting for continuation input (e.g. unmatched quotes),
+			// auto-send Ctrl+C once to recover terminal state.
+			if err == nil && toolCall.Name == "terminal_write" && isLikelyShellContinuationWaiting(rawResult) {
+				a.logln("⚠️  Detected shell continuation prompt; sending Ctrl+C to recover terminal state.")
+				recoveryNote := "Detected shell continuation prompt (likely unmatched quotes); sent Ctrl+C to recover terminal state."
+				if _, cancelErr := a.executeTool(ctx, "terminal_write", `{"command":"\u0003"}`); cancelErr == nil {
 					time.Sleep(250 * time.Millisecond)
 					if readResult, readErr := a.executeTool(ctx, "terminal_read", "{}"); readErr == nil && strings.TrimSpace(readResult) != "" {
-						if strings.TrimSpace(rawResult) != "" {
-							rawResult = rawResult + "\n" + readResult
-						} else {
-							rawResult = readResult
-						}
+						rawResult = rawResult + "\n" + strings.TrimSpace(recoveryNote+"\n"+readResult)
+					} else {
+						rawResult = rawResult + "\n" + recoveryNote
 					}
+				} else {
+					rawResult = strings.TrimSpace(recoveryNote + "\nFailed to send Ctrl+C: " + cancelErr.Error())
 				}
 			}
 
@@ -282,7 +285,7 @@ func stripANSI(s string) string {
 	return ansiRegex.ReplaceAllString(s, "")
 }
 
-func isLikelyHeredocWaiting(output string) bool {
+func isLikelyShellContinuationWaiting(output string) bool {
 	clean := strings.TrimSpace(stripANSI(output))
 	if clean == "" {
 		return false
@@ -293,7 +296,15 @@ func isLikelyHeredocWaiting(output string) bool {
 		if line == "" {
 			continue
 		}
-		return strings.HasPrefix(strings.ToLower(line), "heredoc>")
+		lower := strings.ToLower(line)
+		return strings.HasPrefix(lower, "heredoc>") ||
+			strings.HasPrefix(lower, "quote>") ||
+			strings.HasPrefix(lower, "dquote>") ||
+			strings.HasPrefix(lower, "cmdandquote>") ||
+			strings.HasPrefix(lower, "bquote>") ||
+			strings.HasPrefix(lower, "pipe>") ||
+			strings.HasPrefix(lower, "continue>") ||
+			strings.HasPrefix(lower, "for>")
 	}
 	return false
 }
@@ -404,14 +415,20 @@ func (a *Agent) fixToolArgs(toolName string, argsJSON string) string {
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return argsJSON
 	}
+	normalizeTerminalCommandArg(args)
 	if _, ok := args["command"]; ok {
-		return argsJSON
+		fixed, err := json.Marshal(args)
+		if err != nil {
+			return argsJSON
+		}
+		return string(fixed)
 	}
 	// Try common alternative argument names
 	for _, alt := range []string{"text", "input", "value", "cmd", "data", "content"} {
 		if v, ok := args[alt]; ok {
 			args["command"] = v
 			delete(args, alt)
+			normalizeTerminalCommandArg(args)
 			fixed, _ := json.Marshal(args)
 			return string(fixed)
 		}
@@ -422,12 +439,47 @@ func (a *Agent) fixToolArgs(toolName string, argsJSON string) string {
 			if _, ok := v.(string); ok {
 				args["command"] = v
 				delete(args, k)
+				normalizeTerminalCommandArg(args)
 				fixed, _ := json.Marshal(args)
 				return string(fixed)
 			}
 		}
 	}
 	return argsJSON
+}
+
+func normalizeTerminalCommandArg(args map[string]interface{}) {
+	command, ok := args["command"].(string)
+	if !ok || command == "" {
+		return
+	}
+
+	command = strings.TrimSpace(command)
+
+	if unquoted, err := strconv.Unquote(command); err == nil {
+		command = unquoted
+	}
+
+	replacer := strings.NewReplacer(
+		`\"`, `"`,
+		`\'`, `'`,
+		`\;`, `;`,
+		`\|`, `|`,
+		`\&`, `&`,
+		`\(`, `(`,
+		`\)`, `)`,
+		`\<`, `<`,
+		`\>`, `>`,
+	)
+	for i := 0; i < 4; i++ {
+		next := replacer.Replace(command)
+		if next == command {
+			break
+		}
+		command = next
+	}
+
+	args["command"] = command
 }
 
 func (a *Agent) executeTool(ctx context.Context, name string, args string) (string, error) {
