@@ -212,10 +212,10 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 				lines := strings.Split(strings.TrimSpace(finalResult), "\n")
 				maxLines := 5000
 				if len(lines) <= maxLines {
-					a.logf("✅ Tool Output:\n%s\n", gutterLines(finalResult, gutterGreen+italicStart))
+					a.logf("📟 Tool Output:\n%s\n", gutterLines(finalResult, gutterGreen+italicStart))
 				} else {
 					preview := strings.Join(lines[:maxLines], "\n")
-					a.logf("✅ Tool Output (%d lines, showing first %d):\n%s\n   ...\n", len(lines), maxLines, gutterLines(preview, gutterGreen+italicStart))
+					a.logf("📟 Tool Output (%d lines, showing first %d):\n%s\n   ...\n", len(lines), maxLines, gutterLines(preview, gutterGreen+italicStart))
 				}
 			}
 
@@ -357,7 +357,7 @@ func (a *Agent) sanitizeOutput(argsJSON string, rawOutput string, toolErr error)
 
 	cleanOutput := strings.TrimSpace(rawOutput)
 	if cleanOutput == "" {
-		return "Command executed successfully."
+		return "Command returned nothing."
 	}
 
 	// Never mask output that contains an interactive prompt — the model needs to see it.
@@ -374,7 +374,7 @@ func (a *Agent) sanitizeOutput(argsJSON string, rawOutput string, toolErr error)
 			cleanCmd := strings.TrimSpace(cmd)
 			// Only replace echo-like output when it's EXACTLY the command (not extra output after it)
 			if cleanOutput == cleanCmd {
-				return fmt.Sprintf("Command '%s' executed successfully.", cleanCmd)
+				return fmt.Sprintf("Command '%s' returned nothing.", cleanCmd)
 			}
 		}
 	}
