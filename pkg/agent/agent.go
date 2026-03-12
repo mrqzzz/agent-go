@@ -184,6 +184,21 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 				}
 			}
 
+			// If the shell is still waiting in heredoc mode, auto-send EOF once to recover.
+			if err == nil && toolCall.Name == "terminal_write" && isLikelyHeredocWaiting(rawResult) {
+				a.logln("⚠️  Detected pending heredoc input; sending EOF to recover terminal state.")
+				if _, eofErr := a.executeTool(ctx, "terminal_write", `{"command":"EOF"}`); eofErr == nil {
+					time.Sleep(250 * time.Millisecond)
+					if readResult, readErr := a.executeTool(ctx, "terminal_read", "{}"); readErr == nil && strings.TrimSpace(readResult) != "" {
+						if strings.TrimSpace(rawResult) != "" {
+							rawResult = rawResult + "\n" + readResult
+						} else {
+							rawResult = readResult
+						}
+					}
+				}
+			}
+
 			// Output cleanup (anti-echo / anti-loop)
 			finalResult := a.sanitizeOutput(toolCall.Arguments, rawResult, err)
 
@@ -265,6 +280,22 @@ var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x
 // stripANSI removes ANSI escape sequences from s.
 func stripANSI(s string) string {
 	return ansiRegex.ReplaceAllString(s, "")
+}
+
+func isLikelyHeredocWaiting(output string) bool {
+	clean := strings.TrimSpace(stripANSI(output))
+	if clean == "" {
+		return false
+	}
+	lines := strings.Split(clean, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		return strings.HasPrefix(strings.ToLower(line), "heredoc>")
+	}
+	return false
 }
 
 // escapeForHistory destructively replaces XML-unsafe characters (<, >, &)
