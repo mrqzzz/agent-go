@@ -5,6 +5,8 @@ on:
     branches:
       - main
   pull_request:
+  # This line adds a manual "Run workflow" button in the GitHub Actions tab
+  workflow_dispatch:
 
 jobs:
   build:
@@ -31,6 +33,8 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          # Adding caching to speed up builds and save free minutes
+          cache: true
 
       - name: Download dependencies
         run: go mod download
@@ -39,4 +43,4 @@ jobs:
         env:
           GOOS: ${{ matrix.target.goos }}
           GOARCH: ${{ matrix.target.goarch }}
-        run: go build -v ./cmd/main.go
+        run: go build -v -o bin/main-${{ matrix.target.goos }}-${{ matrix.target.goarch }} ./cmd/main.go
