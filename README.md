@@ -96,6 +96,11 @@ flowchart TD
 
 ## Build
 
+[![Build](https://github.com/mrqzzz/agent-go/actions/workflows/build.yml/badge.svg)](https://github.com/mrqzzz/agent-go/actions/workflows/build.yml)
+
+
+
+Build locally:
 Run build.sh from the repo root to build the binary.
 
 
