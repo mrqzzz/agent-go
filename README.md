@@ -32,62 +32,40 @@ flowchart TD
     User ~~~ Agent ~~~ LLM ~~~ Client ~~~ Server
 
     %% =========================
-    %% Left Column: User
+    %% Nodes
     %% =========================
     subgraph User["User"]
         U1["Submit prompt"]
         U2["Receive final<br/>response"]
     end
-    class User laneUser
-    class U1,U2 step
 
-    %% =========================
-    %% Middle-Left: Agent
-    %% =========================
     subgraph Agent["Agent"]
-        A1["<code>Agent.Run</code>"]
-        A2["<code>aggregateTools</code>"]
-        A3["<code>executeTool</code>"]
-        A4["<code>fixToolArgs</code>"]
+        A1["Agent.Run"]
+        A2["aggregateTools"]
+        A3["executeTool"]
+        A4["fixToolArgs"]
         A5["Append tool result<br/>to history"]
     end
-    class Agent laneAgent
-    class A1,A2,A3,A4,A5 step
 
-    %% =========================
-    %% Center: LLM
-    %% =========================
     subgraph LLM["Large Language Model"]
-        L1["<code>ChatCompletion</code>"]
+        L1["ChatCompletion"]
         L2["Return tool<br/>call(s)"]
         L3["Return final<br/>answer"]
     end
-    class LLM laneModel
-    class L1,L2,L3 step
 
-    %% =========================
-    %% Middle-Right: MCP Client
-    %% =========================
     subgraph Client["MCP Client"]
-        C1["<code>Client.CallTool</code>"]
-        C2["<code>call(tools/call)</code>"]
+        C1["Client.CallTool"]
+        C2["call(tools/call)"]
         C3["Return tool<br/>output"]
     end
-    class Client laneProtocolClient
-    class C1,C2,C3 step
 
-    %% =========================
-    %% Right Column: MCP Server
-    %% =========================
     subgraph Server["MCP Server"]
-        S1["<code>terminal_write</code><br/>handler"]
-        S2["<code>terminal_read</code><br/>handler"]
+        S1["terminal_write<br/>handler"]
+        S2["terminal_read<br/>handler"]
     end
-    class Server laneProtocolServer
-    class S1,S2 step
 
     %% =========================
-    %% Flow Logic
+    %% Logic Flow
     %% =========================
     U1 --> A1
     A1 --> A2
@@ -105,6 +83,16 @@ flowchart TD
     A5 --> L1
     L1 --> L3
     L3 --> U2
+
+    %% =========================
+    %% Class Assignments
+    %% =========================
+    class User laneUser
+    class Agent laneAgent
+    class LLM laneModel
+    class Client laneProtocolClient
+    class Server laneProtocolServer
+    class U1,U2,A1,A2,A3,A4,A5,L1,L2,L3,C1,C2,C3,S1,S2 step
 
 ## Build
 
