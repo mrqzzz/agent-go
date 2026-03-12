@@ -172,7 +172,7 @@ The shell is a persistent, stateful pseudo-terminal. Interactive programs like s
 		errorCount = 0
 
 		for _, toolCall := range response.Message.ToolCalls {
-			a.logf("🔧  Tool Call:\n%s\n%s\n", gutterLines(toolCall.Name, gutterBlue), gutterLines(toolCall.Arguments, gutterBlue))
+			a.logf("⚙️  Tool Call:\n%s\n%s\n", gutterLines(toolCall.Name, gutterBlue), gutterLines(toolCall.Arguments, gutterBlue))
 
 			rawResult, err := a.executeTool(ctx, toolCall.Name, toolCall.Arguments)
 

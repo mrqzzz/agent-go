@@ -228,7 +228,7 @@ func runBatchLines(ag *agent.Agent, lines []string, promptTimeout time.Duration)
 			continue
 		}
 
-		logf("➡️  Batch prompt %d: \033[44m\033[97m%s\033[0m\n", lineNumber, prompt)
+		logf("➡️  Batch prompt %d: \033[100m\033[97m%s\033[0m\n", lineNumber, prompt)
 		if err := runPrompt(ag, prompt, promptTimeout); err != nil {
 			return fmt.Errorf("line %d: %w", lineNumber, err)
 		}

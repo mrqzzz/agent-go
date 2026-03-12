@@ -1,0 +1,7 @@
+1) In the shell run a command to disable the history expansion (if zshell, call "set +o bang_hist", if bash call "set +H")
+2) create a new temp directory only once. IMPORTANT: If you reset the terminal, use this same directory.
+3) enter the directory. IMPORTANT: always work in this same temp directory. 
+4) IMPORTANT: don't install any program during these tasks.
+5) fetch the top 10 workd news and save them to a file called "news.xml"
+6) write a simple python program called "news_pdf_generator.py" that generates a real PDF file "news.pdf" using the news in "news.xml". The produced PDF must be a real PDF, not a simple text file. Use the "fpdf" library if possible, or you can import necessary libraries to build a consistent PDF file. Don't expect existence ov environment variables in the program.
+7) build and run the program

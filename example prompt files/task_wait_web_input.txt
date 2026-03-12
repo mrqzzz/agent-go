@@ -1,0 +1,12 @@
+1) In the shell run a command to disable the history expansion (if zshell, call "set +o bang_hist", if bash call "set +H")
+2) if there is a process running and using on port 8299, then kill it.
+3) create a new temp directory only once. IMPORTANT: If you reset the terminal, use this same directory.
+4) enter the directory. IMPORTANT: always work in this same temp directory. 
+5) generate a python file called "temp_server.py" that creates a html page asking "enter something" in a text box, with a sumbmit button, and serves on port 8299, waitinh for any string and saves it to a file called "answer.txt".
+6) IMPORTANT: run "temp_server.py" in BACKGROUND to keep the shell interactive!
+6) DON'T call the endpoint yourself but wait an external user to call it. Print the link for the user inviting him to use it!
+7) IMPORTANT: using a simple command wait for the existence of the file "answer.txt" and loop here until it exists before proceeding!!! DON'T call yourself the 8299 endpoint, because an external user mus call it! DON'T start the http server again! DON'T reset the terminal.
+8) print out the content of the file "answer.txt". It's ok if it is empty or blank.
+9) stop the python server that you created before.
+10) Delete the temp directory that you used.
+11) end
