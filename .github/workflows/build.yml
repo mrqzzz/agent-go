@@ -5,8 +5,9 @@ on:
     branches:
       - main
     tags:
-      - 'v*' # Triggera il workflow quando carichi un tag che inizia con 'v' (es. v1.0.0)
+      - 'v*' # Trigger automatico per i tag di versione (es. v1.0.0)
   pull_request:
+  # Abilita il trigger manuale tramite il pulsante "Run workflow" su GitHub
   workflow_dispatch:
 
 jobs:
@@ -34,6 +35,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          # Ottimizzazione: mantiene la cache delle dipendenze per build più veloci
           cache: true
 
       - name: Download dependencies
@@ -43,13 +45,15 @@ jobs:
         env:
           GOOS: ${{ matrix.target.goos }}
           GOARCH: ${{ matrix.target.goarch }}
-        # Definiamo il nome del file in base alla piattaforma
+        # Generazione dei binari con nomi specifici per piattaforma
         run: |
           BINARY_NAME=agent-go-${{ matrix.target.goos }}-${{ matrix.target.goarch }}
           if [ "${{ matrix.target.goos }}" = "windows" ]; then
             BINARY_NAME="${BINARY_NAME}.exe"
           fi
+          # Build del comando principale
           go build -v -o "bin/${BINARY_NAME}" ./cmd/main.go
+          # Salvataggio dei nomi nelle variabili di ambiente del workflow
           echo "BINARY_PATH=bin/${BINARY_NAME}" >> $GITHUB_ENV
           echo "BINARY_NAME=${BINARY_NAME}" >> $GITHUB_ENV
 
@@ -59,7 +63,7 @@ jobs:
           name: ${{ env.BINARY_NAME }}
           path: ${{ env.BINARY_PATH }}
 
-  # Questo job gira solo quando carichi un tag (es. git push origin v1.0.0)
+  # Job dedicato alla creazione della Release (eseguito solo sui tag)
   release:
     name: Create GitHub Release
     needs: build
@@ -81,4 +85,7 @@ jobs:
         with:
           files: ./artifacts/**/*
           generate_release_notes: true
+          # Nome della release basato sul tag
+          name: Release ${{ github.ref_name }}
+
 
