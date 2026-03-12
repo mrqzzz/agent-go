@@ -14,10 +14,98 @@ This agent works well with **shell-mcp** https://github.com/mrqzzz/shell-mcp to 
 
 <img width="800" height="436" alt="image" src="https://github.com/user-attachments/assets/314c5d79-155b-4534-a8b5-ba937b03edad" />
 
+<pre>
+flowchart TD
+    %% =========================
+    %% Styles
+    %% =========================
+    classDef laneUser fill:#E8F0FE,stroke:#4C8BF5,stroke-width:1.5px,color:#0B3A8F
+    classDef laneAgent fill:#EAF7EE,stroke:#2E8B57,stroke-width:1.5px,color:#145A32
+    classDef laneModel fill:#FFF4E5,stroke:#F39C12,stroke-width:1.5px,color:#7D4E00
+    classDef laneProtocolClient fill:#F3E8FF,stroke:#8E44AD,stroke-width:1.5px,color:#4A235A
+    classDef laneProtocolServer fill:#FFEFF3,stroke:#E74C3C,stroke-width:1.5px,color:#7B241C
+    classDef step fill:#FFFFFF,stroke:#6C757D,stroke-width:1.2px,color:#212529
 
-<img src="mermaid-diagram.svg" alt="Mermaid Diagram" style="width: 800px; height: auto;">
+    %% =========================
+    %% Horizontal Alignment (Invisible)
+    %% =========================
+    User ~~~ Agent ~~~ LLM ~~~ Server ~~~ Client
 
+    %% =========================
+    %% Left Column: User
+    %% =========================
+    subgraph User["User"]
+        U1["Submit prompt"]
+        U2["Receive final<br/>response"]
+    end
+    class User laneUser
+    class U1,U2 step
 
+    %% =========================
+    %% Middle-Left: Agent
+    %% =========================
+    subgraph Agent["Agent"]
+        A1["<code>Agent.Run</code>"]
+        A2["<code>aggregateTools</code>"]
+        A3["<code>executeTool</code>"]
+        A4["<code>fixToolArgs</code>"]
+        A5["Append tool result<br/>to history"]
+    end
+    class Agent laneAgent
+    class A1,A2,A3,A4,A5 step
+
+    %% =========================
+    %% Center: LLM
+    %% =========================
+    subgraph LLM["Large Language Model"]
+        L1["<code>ChatCompletion</code>"]
+        L2["Return tool<br/>call(s)"]
+        L3["Return final<br/>answer"]
+    end
+    class LLM laneModel
+    class L1,L2,L3 step
+
+    %% =========================
+    %% Middle-Right: MCP Client
+    %% =========================
+    subgraph Client["MCP Client"]
+        C1["<code>Client.CallTool</code>"]
+        C2["<code>call(tools/call)</code>"]
+        C3["Return tool<br/>output"]
+    end
+    class Client laneProtocolClient
+    class C1,C2,C3 step
+
+    %% =========================
+    %% Right Column: MCP Server
+    %% =========================
+    subgraph Server["MCP Server"]
+        S1["<code>terminal_write</code><br/>handler"]
+        S2["<code>terminal_read</code><br/>handler"]
+    end
+    class Server laneProtocolServer
+    class S1,S2 step
+
+    %% =========================
+    %% Flow Logic
+    %% =========================
+    U1 --> A1
+    A1 --> A2
+    A2 --> L1
+    L1 --> L2
+    L2 --> A3
+    A3 --> A4
+    A4 --> C1
+    C1 --> C2
+    C2 --> S1
+    C2 --> S2
+    S1 --> C3
+    S2 --> C3
+    C3 --> A5
+    A5 --> L1
+    L1 --> L3
+    L3 --> U2
+</pre>
 
 
 ## Build
