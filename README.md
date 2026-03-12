@@ -94,13 +94,26 @@ flowchart TD
     class U1,U2,A1,A2,A3,A4,A5,L1,L2,L3,C1,C2,C3,S1,S2 step
 ```
 
+[![Build Status](https://github.com/mrqzzz/agent-go/actions/workflows/build.yml/badge.svg)](https://github.com/mrqzzz/agent-go/actions)
+[![Latest Release](https://img.shields.io/github/v/release/mrqzzz/agent-go?display_name=tag&color=blue)](https://github.com/mrqzzz/agent-go/releases/latest)
+
+---
+
+## Download Binaries
+
+Download the latest compiled version for your platform. These links point to the most recent official release:
+
+| Operating System | Architecture | Download |
+| :--- | :--- | :--- |
+| 🪟 **Windows** | x86_64 | [Download .exe](https://github.com/mrqzzz/agent-go/releases/latest/download/agent-go-windows-amd64.exe) |
+| 🐧 **Linux** | x86_64 | [Download binary](https://github.com/mrqzzz/agent-go/releases/latest/download/agent-go-linux-amd64) |
+| 🍎 **macOS** | Apple Silicon (M1/M2/M3) | [Download binary](https://github.com/mrqzzz/agent-go/releases/latest/download/agent-go-darwin-arm64) |
+| 🍎 **macOS** | Intel | [Download binary](https://github.com/mrqzzz/agent-go/releases/latest/download/agent-go-darwin-amd64) |
+
 ## Build
 
-[![Build](https://github.com/mrqzzz/agent-go/actions/workflows/build.yml/badge.svg)](https://github.com/mrqzzz/agent-go/actions/workflows/build.yml)
-
-
-
 Build locally:
+
 Run build.sh from the repo root to build the binary.
 
 
