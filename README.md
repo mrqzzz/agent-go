@@ -15,7 +15,7 @@ This agent works well with **shell-mcp** https://github.com/mrqzzz/shell-mcp to 
 <img width="800" height="436" alt="image" src="https://github.com/user-attachments/assets/314c5d79-155b-4534-a8b5-ba937b03edad" />
 
 
-<img width="800" alt="diagram" src="mermaid-diagram.svg" />
+<img width="800" height="800" alt="diagram" src="mermaid-diagram.svg" />
 
 
 
