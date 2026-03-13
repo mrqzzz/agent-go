@@ -107,10 +107,12 @@ Download the latest compiled version for your platform. These links point to the
 
 | Operating System | Architecture | Download |
 | :--- | :--- | :--- |
-| 🪟 **Windows** | x86_64 | [Download .exe](https://github.com/mrqzzz/agent-go/releases/latest/download/agent-go-windows-amd64.exe) |
-| 🐧 **Linux** | x86_64 | [Download binary](https://github.com/mrqzzz/agent-go/releases/latest/download/agent-go-linux-amd64) |
-| 🍎 **macOS** | Apple Silicon (M1/M2/M3) | [Download binary](https://github.com/mrqzzz/agent-go/releases/latest/download/agent-go-darwin-arm64) |
-| 🍎 **macOS** | Intel | [Download binary](https://github.com/mrqzzz/agent-go/releases/latest/download/agent-go-darwin-amd64) |
+| 🪟 **Windows** | x86_64 | [agent-go-windows-amd64.exe](https://github.com/mrqzzz/agent-go/releases/latest/download/agent-go-windows-amd64.exe) |
+| 🪟 **Windows** | ARM64 | [agent-go-windows-arm64.exe](https://github.com/mrqzzz/agent-go/releases/latest/download/agent-go-windows-arm64.exe) |
+| 🐧 **Linux** | x86_64 | [agent-go-linux-amd64](https://github.com/mrqzzz/agent-go/releases/latest/download/agent-go-linux-amd64) |
+| 🐧 **Linux** | ARM64 | [agent-go-linux-arm64](https://github.com/mrqzzz/agent-go/releases/latest/download/agent-go-linux-arm64) |
+| 🍎 **macOS** | Apple Silicon (M1/M2/M3) | [agent-go-darwin-arm64](https://github.com/mrqzzz/agent-go/releases/latest/download/agent-go-darwin-arm64) |
+| 🍎 **macOS** | Intel | [agent-go-darwin-amd64](https://github.com/mrqzzz/agent-go/releases/latest/download/agent-go-darwin-amd64) |
 
 ## Build
 

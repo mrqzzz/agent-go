@@ -26,6 +26,10 @@ jobs:
             goarch: amd64
           - goos: linux
             goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: windows
+            goarch: arm64
 
     steps:
       - name: Checkout repository
